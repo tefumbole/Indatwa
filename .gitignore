@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+backend/vendor/
+
+# Environment
+.env
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Build
+frontend/dist/
+backend/public/build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+backend/storage/logs/*
+!backend/storage/logs/.gitignore
+
+# Laravel
+backend/storage/*.key
+backend/.phpunit.result.cache
+backend/bootstrap/cache/*.php
+!backend/bootstrap/cache/.gitignore
+
+# Testing
+coverage/
+
+# OS
+Thumbs.db

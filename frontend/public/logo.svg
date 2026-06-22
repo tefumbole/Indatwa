@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="IPS Logo">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#D4AF37"/>
+      <stop offset="100%" style="stop-color:#e8c96a"/>
+    </linearGradient>
+  </defs>
+  <!-- Left arc (blue) -->
+  <path d="M 60 12 A 48 48 0 0 0 18 60" fill="none" stroke="#0B3D91" stroke-width="5" stroke-linecap="round"/>
+  <!-- Right arc (gold) -->
+  <path d="M 60 12 A 48 48 0 0 1 102 60" fill="none" stroke="url(#goldGrad)" stroke-width="5" stroke-linecap="round"/>
+  <!-- Top gold dot -->
+  <circle cx="60" cy="10" r="5" fill="#D4AF37"/>
+  <!-- IPS text -->
+  <text x="60" y="68" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="28" fill="#0B3D91">IPS</text>
+</svg>

@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ips-blue: #0B3D91;
+  --color-ips-blue-dark: #082d6b;
+  --color-ips-blue-light: #1a5cb8;
+  --color-ips-gold: #D4AF37;
+  --color-ips-gold-light: #e8c96a;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-display: "Playfair Display", Georgia, serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-white text-slate-800 antialiased;
+    font-family: var(--font-sans);
+  }
+
+  .dark body {
+    @apply bg-slate-950 text-slate-100;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-xl;
+  }
+
+  .dark .glass {
+    @apply bg-slate-900/70 border-slate-700/30;
+  }
+
+  .text-gradient-gold {
+    @apply bg-gradient-to-r from-ips-gold to-ips-gold-light bg-clip-text text-transparent;
+  }
+}
