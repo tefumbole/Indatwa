@@ -13,6 +13,10 @@
     RewriteCond %{REQUEST_URI} ^/storage/
     RewriteRule ^ index.php [L]
 
+    # Vite build lives in /build/ but HTML references /assets/ at site root
+    RewriteRule ^assets/(.*)$ build/assets/$1 [L]
+    RewriteRule ^(logo\.svg|favicon\.svg|icons\.svg)$ build/$1 [L]
+
     # Root URL: public_html is a directory, so !-d would skip the SPA rule
     RewriteRule ^$ build/index.html [L]
 
