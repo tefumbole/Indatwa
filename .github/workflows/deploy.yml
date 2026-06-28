@@ -1,46 +1,104 @@
-name: Build IPS Platform
+name: Deploy to Hostinger
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+env:
+  DOMAIN: indatwagency.com
+  NODE_VERSION: "20"
+  PHP_VERSION: "7.4"
 
 jobs:
-  build-frontend:
+  validate:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install & Build Frontend
+      - name: Build frontend
         run: |
           cd frontend
           npm ci
-          VITE_API_URL=https://indatwa.rw/api/v1 npm run build
+          VITE_API_URL=https://${{ env.DOMAIN }}/api/v1 npm run build
 
-      - uses: actions/upload-artifact@v4
+      - uses: shivammathur/setup-php@v2
         with:
-          name: frontend-dist
-          path: frontend/dist/
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, pdo_mysql, gd, bcmath
 
-  build-backend:
+      - name: Validate backend
+        run: |
+          cd backend
+          composer install --no-dev --optimize-autoloader
+          php artisan about
+
+  deploy:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/setup-node@v4
         with:
-          php-version: '7.4'
-          extensions: mbstring, pdo_mysql, gd, bcmath
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Install Backend Dependencies
-        run: cd backend && composer install --no-dev --optimize-autoloader
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          VITE_API_URL=https://${{ env.DOMAIN }}/api/v1 npm run build
 
-      - name: Validate Laravel
-        run: cd backend && php artisan about
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy backend on server
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          ssh -p "${SSH_PORT}" -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "${SSH_USER}@${SSH_HOST}" << 'EOF'
+          set -e
+          cd ~/Indatwa
+          git fetch origin main
+          git reset --hard origin/main
+          bash deploy/server-update.sh
+          EOF
+
+      - name: Deploy frontend assets
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          rsync -avz --delete \
+            -e "ssh -p ${SSH_PORT} -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
+            frontend/dist/ \
+            "${SSH_USER}@${SSH_HOST}:domains/indatwagency.com/public_html/build/"
+
+      - name: Verify deployment
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          ssh -p "${SSH_PORT}" -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "${SSH_USER}@${SSH_HOST}" \
+            "curl -fsS https://${{ env.DOMAIN }}/api/v1/services | head -c 200 && echo && echo Deploy complete: https://${{ env.DOMAIN }}"
