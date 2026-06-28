@@ -13,9 +13,14 @@
     RewriteCond %{REQUEST_URI} ^/storage/
     RewriteRule ^ index.php [L]
 
+    # Root URL: public_html is a directory, so !-d would skip the SPA rule
+    RewriteRule ^$ build/index.html [L]
+
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} !^/api/
     RewriteCond %{REQUEST_URI} !^/storage/
     RewriteRule ^ build/index.html [L]
 </IfModule>
+
+DirectoryIndex build/index.html
