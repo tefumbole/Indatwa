@@ -22,8 +22,9 @@ php artisan migrate --force
 php artisan config:cache
 php artisan route:cache
 
-# Hostinger cron (hourly task reminders):
-# curl -s "https://indatwagency.com/api/v1/cron/task-reminders?token=YOUR_CRON_SECRET"
+# Hostinger cron (hourly task reminders + minute announcements):
+# curl -s "https://indatwagency.com/api/v1/cron/run?token=YOUR_CRON_SECRET"
+# curl -s "https://indatwagency.com/api/v1/cron/announcements?token=YOUR_CRON_SECRET"
 
 mkdir -p "${PUBLIC_HTML}/build"
 cp "${REPO_DIR}/deploy/public_html/index.php" "${PUBLIC_HTML}/index.php"

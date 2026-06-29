@@ -11,6 +11,9 @@ const STATUSES = [
   'awaiting_payment', 'approved', 'in_progress', 'completed', 'rejected',
 ]
 
+const adminSelectClass = 'px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm flex-1 min-w-[160px] outline-none focus:ring-2 focus:ring-ips-blue/20'
+const adminInputClass = 'px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm flex-1 min-w-[160px] outline-none focus:ring-2 focus:ring-ips-blue/20'
+
 export function AdminRequestDetail() {
   const { id } = useParams<{ id: string }>()
   const { token } = useAuth()
@@ -129,11 +132,11 @@ export function AdminRequestDetail() {
         </div>
 
         <div className="flex flex-wrap gap-2 mb-4">
-          <select className="px-3 py-2 rounded-lg border text-sm flex-1 min-w-[160px]" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <select className={adminSelectClass} value={status} onChange={(e) => setStatus(e.target.value)}>
             {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
           </select>
           <input
-            className="px-3 py-2 rounded-lg border text-sm flex-1 min-w-[160px]"
+            className={adminInputClass}
             placeholder="Status note (optional)"
             value={statusNote}
             onChange={(e) => setStatusNote(e.target.value)}
@@ -142,7 +145,7 @@ export function AdminRequestDetail() {
         </div>
 
         <div className="flex flex-wrap gap-2 mb-6">
-          <select className="px-3 py-2 rounded-lg border text-sm flex-1 min-w-[160px]" value={assignId} onChange={(e) => setAssignId(e.target.value)}>
+          <select className={adminSelectClass} value={assignId} onChange={(e) => setAssignId(e.target.value)}>
             <option value="">Unassigned</option>
             {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>

@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\AdminAnnouncementController;
 use App\Http\Controllers\Api\V1\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\AdminRequestController;
 use App\Http\Controllers\Api\V1\Admin\AdminSettingsController;
 use App\Http\Controllers\Api\V1\Admin\AdminTaskController;
+use App\Http\Controllers\Api\V1\Admin\AdminUserController;
 use App\Http\Controllers\Api\V1\Admin\AdminWhatsAppController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Portal\PortalController;
@@ -37,6 +39,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/contact', [ContactController::class, 'store']);
     Route::post('/webhooks/wasender', [WasenderWebhookController::class, 'handle']);
     Route::get('/cron/task-reminders', [CronController::class, 'taskReminders']);
+    Route::get('/cron/announcements', [CronController::class, 'processAnnouncements']);
     Route::get('/cron/run', [CronController::class, 'runSchedule']);
 
     // Auth
@@ -72,7 +75,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // Admin routes
-    Route::middleware(['auth:sanctum', 'role:super_admin,director,operations_manager,finance_officer,protocol_officer,customer_service'])->prefix('admin')->group(function () {
+    Route::middleware(['auth:sanctum', 'role:super_admin,director,operations_manager,customer_service'])->prefix('admin')->group(function () {
         Route::get('/dashboard', [AdminDashboardController::class, 'index']);
         Route::get('/staff', [AdminRequestController::class, 'staff']);
         Route::get('/requests', [AdminRequestController::class, 'index']);
@@ -101,6 +104,18 @@ Route::prefix('v1')->group(function () {
             Route::delete('/tasks/{id}', [AdminTaskController::class, 'destroy']);
 
             Route::get('/whatsapp/logs', [AdminWhatsAppController::class, 'index']);
+
+            Route::get('/announcements', [AdminAnnouncementController::class, 'index']);
+            Route::post('/announcements', [AdminAnnouncementController::class, 'store']);
+            Route::post('/announcements/{id}/send', [AdminAnnouncementController::class, 'sendNow']);
+            Route::delete('/announcements/{id}', [AdminAnnouncementController::class, 'destroy']);
+            Route::post('/announcements/process-scheduled', [AdminAnnouncementController::class, 'processScheduled']);
+            Route::get('/announcements/settings', [AdminAnnouncementController::class, 'settings']);
+            Route::patch('/announcements/settings', [AdminAnnouncementController::class, 'updateSettings']);
+            Route::get('/announcements/templates', [AdminAnnouncementController::class, 'templates']);
+            Route::post('/announcements/templates', [AdminAnnouncementController::class, 'storeTemplate']);
+            Route::get('/announcements/recipients/clients', [AdminAnnouncementController::class, 'recipientClients']);
+            Route::get('/announcements/recipients/staff', [AdminAnnouncementController::class, 'recipientStaff']);
         });
     });
 });

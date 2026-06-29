@@ -14,6 +14,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 const inputClass = 'w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/40 focus:ring-2 focus:ring-ips-gold/40 focus:border-ips-gold outline-none transition text-sm'
+const selectClass = `${inputClass} form-select-dark`
 const labelClass = 'block text-sm font-medium text-white/80 mb-1.5'
 
 const TOTAL_STEPS = STEP_LABELS.length
@@ -280,7 +281,7 @@ export function RequestServicePage() {
                       </div>
                       <div>
                         <label className={labelClass}>Event Type *</label>
-                        <select className={inputClass} value={form.event_type} onChange={(e) => update({ event_type: e.target.value })}>
+                        <select className={selectClass} value={form.event_type} onChange={(e) => update({ event_type: e.target.value })}>
                           <option value="">Select type</option>
                           {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                         </select>

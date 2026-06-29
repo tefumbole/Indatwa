@@ -1,7 +1,7 @@
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
 import {
-  CheckSquare, ClipboardList, LayoutDashboard, LogOut, Menu, Settings, Users, X,
+  CheckSquare, ClipboardList, LayoutDashboard, LogOut, Megaphone, Menu, Settings, Users, X,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
@@ -18,6 +18,12 @@ const NAV_GROUPS = [
     items: [
       { label: 'Service Requests', href: '/admin/requests', icon: ClipboardList },
       { label: 'Task Management', href: '/admin/tasks', icon: CheckSquare },
+    ],
+  },
+  {
+    label: 'Communication',
+    items: [
+      { label: 'Announcements', href: '/admin/announcements', icon: Megaphone },
     ],
   },
   {

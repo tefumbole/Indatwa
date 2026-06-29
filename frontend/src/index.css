@@ -24,6 +24,25 @@
   .dark body {
     @apply bg-slate-950 text-slate-100;
   }
+
+  /* Fix invisible select options (white text on white dropdown) */
+  select option {
+    color: #0f172a;
+    background-color: #ffffff;
+  }
+
+  select.form-select-light {
+    @apply bg-white text-slate-900 border-slate-200;
+  }
+
+  select.form-select-dark {
+    @apply bg-[#0a2560] text-white border-white/20;
+  }
+
+  select.form-select-dark option {
+    color: #0f172a;
+    background-color: #ffffff;
+  }
 }
 
 @layer utilities {

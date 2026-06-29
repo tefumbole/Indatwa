@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Open;
 
 use App\Http\Controllers\Controller;
+use App\Services\Announcements\AnnouncementService;
 use App\Services\Notifications\TaskNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,10 +37,26 @@ class CronController extends Controller
         }
 
         Artisan::call('tasks:send-reminders');
+        Artisan::call('announcements:process-scheduled');
 
         return response()->json([
             'success' => true,
             'output' => Artisan::output(),
         ]);
+    }
+
+    public function processAnnouncements(Request $request, AnnouncementService $announcements): JsonResponse
+    {
+        $token = $request->query('token') ?? $request->header('X-Cron-Token');
+        $secret = config('app.cron_secret');
+
+        if (! $secret || ! hash_equals($secret, (string) $token)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $count = $announcements->processScheduled();
+        Log::info('Cron announcements processed', ['count' => $count]);
+
+        return response()->json(['success' => true, 'data' => ['processed' => $count]]);
     }
 }

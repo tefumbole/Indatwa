@@ -60,7 +60,7 @@ export function AdminRequests() {
             />
           </div>
           <select
-            className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+            className="px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm form-select-light outline-none"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           >

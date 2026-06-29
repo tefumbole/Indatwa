@@ -4,6 +4,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { Footer } from '@/components/layout/Footer'
 import { AuthProvider } from '@/context/AuthContext'
 import { ThemeProvider } from '@/context/ThemeContext'
+import { AdminAnnouncements } from '@/pages/admin/AdminAnnouncements'
 import { AdminDashboard } from '@/pages/admin/AdminDashboard'
 import { AdminRequestDetail } from '@/pages/admin/AdminRequestDetail'
 import { AdminRequests } from '@/pages/admin/AdminRequests'
@@ -69,6 +70,7 @@ function App() {
                 <Route path="requests/:id" element={<AdminRequestDetail />} />
                 <Route path="users" element={<AdminUsers />} />
                 <Route path="tasks" element={<AdminTasks />} />
+                <Route path="announcements" element={<AdminAnnouncements />} />
               </Route>
             </Route>
             <Route path="/*" element={<PublicSite />} />

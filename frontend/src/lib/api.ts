@@ -320,6 +320,33 @@ export interface WhatsAppLogData {
   logs: WhatsAppLogEntry[]
 }
 
+export interface Announcement {
+  id: number
+  reference: string
+  title: string
+  body: string
+  header: string | null
+  footer: string | null
+  audience_type: string
+  status: string
+  whatsapp_status: string
+  scheduled_at: string | null
+  sent_at: string | null
+  sent_count: number | null
+  failed_count: number | null
+  created_at: string
+}
+
+export interface AnnouncementSettings {
+  id: number
+  company_name: string
+  default_header: string | null
+  serial_prefix: string
+  next_serial: number
+  serial_padding: number
+  timezone: string
+}
+
 export interface TrackRequestResult {
   reference_number: string
   status: string
@@ -545,6 +572,48 @@ export const api = {
 
   testWhatsApp: (token: string, phone?: string) =>
     postAuthApi<{ success: boolean; message?: string }>('/whatsapp/test', phone ? { phone } : {}, token),
+
+  getAnnouncements: (token: string, status?: string) => {
+    const qs = status ? `?status=${status}` : ''
+    return authFetch<Announcement[]>(`/admin/announcements${qs}`, token)
+  },
+
+  createAnnouncement: async (token: string, data: {
+    title: string; body: string; header?: string; footer?: string
+    audience_type: string; recipients?: { name?: string; phone: string; email?: string }[]
+    send_now?: boolean; scheduled_at?: string; attachments?: File[]
+  }): Promise<ApiResponse<Announcement>> => {
+    try {
+      const form = new FormData()
+      form.append('title', data.title)
+      form.append('body', data.body)
+      form.append('audience_type', data.audience_type)
+      if (data.header) form.append('header', data.header)
+      if (data.footer) form.append('footer', data.footer)
+      if (data.send_now) form.append('send_now', '1')
+      if (data.scheduled_at) form.append('scheduled_at', data.scheduled_at)
+      if (data.recipients) form.append('recipients', JSON.stringify(data.recipients))
+      data.attachments?.forEach((f) => form.append('attachments[]', f))
+
+      const res = await fetch(`${API_BASE}/admin/announcements`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+        body: form,
+      })
+      return await res.json()
+    } catch {
+      return { success: false, message: 'Network error.' }
+    }
+  },
+
+  sendAnnouncementNow: (token: string, id: number) =>
+    postAuthApi<Announcement>(`/admin/announcements/${id}/send`, {}, token),
+
+  getAnnouncementSettings: (token: string) =>
+    authFetch<AnnouncementSettings>('/admin/announcements/settings', token),
+
+  updateAnnouncementSettings: (token: string, data: Partial<AnnouncementSettings>) =>
+    patchApi('/admin/announcements/settings', data, token),
 
   downloadAdminPdf: async (token: string, id: number, filename: string) => {
     try {
