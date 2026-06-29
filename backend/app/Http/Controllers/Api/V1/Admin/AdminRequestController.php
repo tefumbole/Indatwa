@@ -3,30 +3,44 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\CalendarDate;
+use App\Models\ServiceAssignment;
+use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\ServiceRequestItem;
 use App\Models\User;
 use App\Services\Notifications\RequestNotificationService;
+use App\Services\ReferenceNumberService;
 use App\Services\RequestPdfService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class AdminRequestController extends Controller
 {
     private $pdfService;
     private $notifications;
+    private $referenceNumbers;
 
-    public function __construct(RequestPdfService $pdfService, RequestNotificationService $notifications)
-    {
+    public function __construct(
+        RequestPdfService $pdfService,
+        RequestNotificationService $notifications,
+        ReferenceNumberService $referenceNumbers
+    ) {
         $this->pdfService = $pdfService;
         $this->notifications = $notifications;
+        $this->referenceNumbers = $referenceNumbers;
     }
 
     public function index(Request $request): JsonResponse
     {
         $query = ServiceRequest::withCount('items')->orderByDesc('submitted_at');
+
+        if ($tab = $request->query('tab')) {
+            $this->applyTabFilter($query, $tab);
+        }
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
@@ -100,6 +114,7 @@ class AdminRequestController extends Controller
                         'id' => $i->id,
                         'name' => $i->service_name,
                         'status' => $i->status,
+                        'quoted_price' => $i->quoted_price,
                         'admin_comment' => $i->admin_comment,
                         'reviewed_at' => $i->reviewed_at,
                     ];
@@ -116,6 +131,13 @@ class AdminRequestController extends Controller
                 'messages' => $messages,
                 'pdf_url' => $this->pdfService->getPublicUrl($serviceRequest),
                 'tracking_url' => config('app.frontend_url').'/track/'.$serviceRequest->tracking_token,
+                'quoted_amount' => $serviceRequest->quoted_amount,
+                'quotation_notes' => $serviceRequest->quotation_notes,
+                'sent_for_signature_at' => $serviceRequest->sent_for_signature_at
+                    ? $serviceRequest->sent_for_signature_at->toIso8601String() : null,
+                'client_signed_at' => $serviceRequest->client_signed_at
+                    ? $serviceRequest->client_signed_at->toIso8601String() : null,
+                'assignments' => ServiceAssignment::where('service_request_id', $serviceRequest->id)->get(),
             ]),
         ]);
     }
@@ -162,6 +184,7 @@ class AdminRequestController extends Controller
         $validated = $request->validate([
             'status' => 'required|in:pending,approved,rejected',
             'admin_comment' => 'nullable|string|max:2000',
+            'quoted_price' => 'nullable|numeric|min:0',
         ]);
 
         $serviceRequest = ServiceRequest::findOrFail($id);
@@ -172,6 +195,7 @@ class AdminRequestController extends Controller
         $item->update([
             'status' => $validated['status'],
             'admin_comment' => $validated['admin_comment'] ?? null,
+            'quoted_price' => $validated['quoted_price'] ?? $item->quoted_price,
             'reviewed_by' => $request->user()->id,
             'reviewed_at' => now(),
         ]);
@@ -266,18 +290,39 @@ class AdminRequestController extends Controller
     public function setQuotation(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
-            'quoted_amount' => 'required|numeric|min:0',
+            'quoted_amount' => 'nullable|numeric|min:0',
             'quotation_notes' => 'nullable|string|max:5000',
             'send_to_client' => 'nullable|boolean',
+            'send_for_signature' => 'nullable|boolean',
+            'items' => 'nullable|array',
+            'items.*.id' => 'required_with:items|integer',
+            'items.*.quoted_price' => 'nullable|numeric|min:0',
         ]);
 
-        $serviceRequest = ServiceRequest::findOrFail($id);
+        $serviceRequest = ServiceRequest::with('items')->findOrFail($id);
         $fromStatus = $serviceRequest->status;
 
+        if (! empty($validated['items'])) {
+            foreach ($validated['items'] as $row) {
+                ServiceRequestItem::where('service_request_id', $serviceRequest->id)
+                    ->where('id', $row['id'])
+                    ->update(['quoted_price' => $row['quoted_price'] ?? null]);
+            }
+            $serviceRequest->load('items');
+        }
+
+        $total = $validated['quoted_amount']
+            ?? $serviceRequest->items->where('status', 'approved')->sum('quoted_price');
+
+        if ($total === null || $total === '') {
+            return response()->json(['success' => false, 'message' => 'Quoted amount is required'], 422);
+        }
+
         $serviceRequest->update([
-            'quoted_amount' => $validated['quoted_amount'],
+            'quoted_amount' => $total,
             'quotation_notes' => $validated['quotation_notes'] ?? null,
             'quotation_sent_at' => ! empty($validated['send_to_client']) ? now() : $serviceRequest->quotation_sent_at,
+            'sent_for_signature_at' => ! empty($validated['send_for_signature']) ? now() : $serviceRequest->sent_for_signature_at,
             'status' => 'quotation_prepared',
             'reviewed_by' => $request->user()->id,
             'reviewed_at' => now(),
@@ -297,7 +342,7 @@ class AdminRequestController extends Controller
             ['service_request_id' => $serviceRequest->id],
             [
                 'invoice_number' => $invoiceNumber,
-                'total_amount' => $validated['quoted_amount'],
+                'total_amount' => $total,
                 'amount_paid' => 0,
                 'currency' => 'RWF',
                 'status' => 'sent',
@@ -307,11 +352,17 @@ class AdminRequestController extends Controller
             ]
         );
 
-        if (! empty($validated['send_to_client'])) {
+        try {
+            $this->pdfService->generate($serviceRequest->fresh());
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Quotation PDF failed: '.$e->getMessage());
+        }
+
+        if (! empty($validated['send_to_client']) || ! empty($validated['send_for_signature'])) {
             try {
                 $this->notifications->sendQuotation(
                     $serviceRequest->fresh(),
-                    (float) $validated['quoted_amount'],
+                    (float) $total,
                     $validated['quotation_notes'] ?? null
                 );
             } catch (\Throwable $e) {
@@ -325,8 +376,163 @@ class AdminRequestController extends Controller
                 'quoted_amount' => $serviceRequest->quoted_amount,
                 'status' => $serviceRequest->status,
                 'invoice_number' => $invoiceNumber,
+                'sent_for_signature_at' => $serviceRequest->sent_for_signature_at,
             ],
         ]);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'services' => 'required|array|min:1',
+            'services.*' => 'integer|exists:services,id',
+            'client_name' => 'required|string|max:255',
+            'client_phone' => 'required|string|max:20',
+            'client_email' => 'nullable|email',
+            'event_title' => 'required|string|max:255',
+            'event_type' => 'required|string|max:100',
+            'event_date' => 'required|date',
+            'venue' => 'nullable|string|max:500',
+            'event_description' => 'nullable|string|max:5000',
+        ]);
+
+        $reference = $this->referenceNumbers->generate('request', 'IPS');
+        $serviceRequest = ServiceRequest::create([
+            'reference_number' => $reference,
+            'tracking_token' => Str::random(64),
+            'status' => 'submitted',
+            'client_name' => $validated['client_name'],
+            'client_phone' => $validated['client_phone'],
+            'client_email' => $validated['client_email'] ?? null,
+            'event_title' => $validated['event_title'],
+            'event_type' => $validated['event_type'],
+            'event_date' => $validated['event_date'],
+            'event_start_date' => $validated['event_date'],
+            'venue' => $validated['venue'] ?? null,
+            'event_description' => $validated['event_description'] ?? null,
+            'submitted_at' => now(),
+            'reviewed_by' => $request->user()->id,
+        ]);
+
+        foreach ($validated['services'] as $serviceId) {
+            $service = Service::find($serviceId);
+            if ($service) {
+                $serviceRequest->items()->create([
+                    'service_id' => $service->id,
+                    'service_name' => $service->name,
+                    'status' => 'pending',
+                ]);
+            }
+        }
+
+        return response()->json(['success' => true, 'data' => $this->summary($serviceRequest->loadCount('items'))], 201);
+    }
+
+    public function acceptAll(int $id, Request $request): JsonResponse
+    {
+        $serviceRequest = ServiceRequest::with('items')->findOrFail($id);
+
+        foreach ($serviceRequest->items as $item) {
+            if ($item->status === 'pending') {
+                $item->update([
+                    'status' => 'approved',
+                    'reviewed_by' => $request->user()->id,
+                    'reviewed_at' => now(),
+                ]);
+            }
+        }
+
+        $fromStatus = $serviceRequest->status;
+        $serviceRequest->update([
+            'status' => 'under_review',
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+        ]);
+
+        DB::table('service_request_status_history')->insert([
+            'service_request_id' => $serviceRequest->id,
+            'from_status' => $fromStatus,
+            'to_status' => 'under_review',
+            'changed_by' => $request->user()->id,
+            'comment' => 'All services accepted by admin',
+            'created_at' => now(),
+        ]);
+
+        return response()->json(['success' => true, 'data' => $this->summary($serviceRequest->fresh()->loadCount('items'))]);
+    }
+
+    public function assignSchedule(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'assigned_user_ids' => 'required|array|min:1',
+            'assigned_user_ids.*' => 'integer|exists:users,id',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'start_time' => 'nullable|date_format:H:i',
+            'end_time' => 'nullable|date_format:H:i',
+            'notes' => 'nullable|string|max:2000',
+        ]);
+
+        $serviceRequest = ServiceRequest::findOrFail($id);
+
+        $assignment = ServiceAssignment::create([
+            'service_request_id' => $serviceRequest->id,
+            'assigned_user_ids' => $validated['assigned_user_ids'],
+            'start_date' => $validated['start_date'],
+            'end_date' => $validated['end_date'] ?? $validated['start_date'],
+            'start_time' => $validated['start_time'] ?? null,
+            'end_time' => $validated['end_time'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+            'created_by' => $request->user()->id,
+        ]);
+
+        CalendarDate::updateOrCreate(
+            ['date' => $validated['start_date']],
+            [
+                'is_booked' => true,
+                'service_request_id' => $serviceRequest->id,
+                'label' => $serviceRequest->event_title,
+                'created_by' => $request->user()->id,
+            ]
+        );
+
+        if (! empty($validated['end_date']) && $validated['end_date'] !== $validated['start_date']) {
+            CalendarDate::updateOrCreate(
+                ['date' => $validated['end_date']],
+                [
+                    'is_booked' => true,
+                    'service_request_id' => $serviceRequest->id,
+                    'label' => $serviceRequest->event_title,
+                    'created_by' => $request->user()->id,
+                ]
+            );
+        }
+
+        return response()->json(['success' => true, 'data' => $assignment]);
+    }
+
+    private function applyTabFilter($query, string $tab): void
+    {
+        switch ($tab) {
+            case 'awaiting_confirmation':
+                $query->whereIn('status', ['submitted', 'under_review'])
+                    ->whereHas('items', fn ($q) => $q->where('status', 'pending'));
+                break;
+            case 'awaiting_client':
+                $query->where('status', 'quotation_prepared')
+                    ->whereNotNull('sent_for_signature_at')
+                    ->whereNull('client_signed_at');
+                break;
+            case 'confirmed':
+                $query->where(function ($q) {
+                    $q->whereNotNull('client_signed_at')
+                        ->orWhereIn('status', ['approved', 'awaiting_payment', 'in_progress', 'completed']);
+                });
+                break;
+            case 'all':
+            default:
+                break;
+        }
     }
 
     private function summary(ServiceRequest $r): array
@@ -343,6 +549,9 @@ class AdminRequestController extends Controller
             'submitted_at' => $r->submitted_at ? $r->submitted_at->toIso8601String() : null,
             'items_count' => $r->items_count ?? ($r->relationLoaded('items') ? $r->items->count() : 0),
             'assigned_to' => $r->assigned_to,
+            'quoted_amount' => $r->quoted_amount,
+            'client_signed_at' => $r->client_signed_at ? $r->client_signed_at->toIso8601String() : null,
+            'sent_for_signature_at' => $r->sent_for_signature_at ? $r->sent_for_signature_at->toIso8601String() : null,
         ];
     }
 }

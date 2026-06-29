@@ -70,17 +70,22 @@
         <div class="section">
             <div class="section-title">Requested Services</div>
             <table class="services">
-                <thead><tr><th>#</th><th>Service</th><th>Status</th></tr></thead>
+                <thead><tr><th>#</th><th>Service</th><th>Status</th>@if($request->quoted_amount)<th>Amount (RWF)</th>@endif</tr></thead>
                 <tbody>
                     @foreach($request->items as $i => $item)
                     <tr>
                         <td>{{ $i + 1 }}</td>
                         <td>{{ $item->service_name }}</td>
                         <td>{{ ucfirst($item->status) }}</td>
+                        @if($request->quoted_amount)<td>{{ $item->quoted_price ? number_format($item->quoted_price, 0) : '—' }}</td>@endif
                     </tr>
                     @endforeach
                 </tbody>
             </table>
+            @if($request->quoted_amount)
+            <p style="margin-top: 10px; font-weight: bold; text-align: right;">Total Quoted: {{ number_format($request->quoted_amount, 0) }} RWF</p>
+            @if($request->quotation_notes)<p style="margin-top: 6px; font-size: 10px; color: #64748b;">{{ $request->quotation_notes }}</p>@endif
+            @endif
         </div>
 
         @if($request->documents->count())
@@ -103,7 +108,7 @@
                     <p style="color: #94a3b8;">No signature on file</p>
                 @endif
             </div>
-            <p style="margin-top: 6px; font-size: 9px; color: #94a3b8;">Signed by {{ $request->client_name }} on {{ $request->submitted_at->format('d M Y') }}</p>
+            <p style="margin-top: 6px; font-size: 9px; color: #94a3b8;">Signed by {{ $request->client_name }} on {{ ($request->client_signed_at ?? $request->submitted_at)->format('d M Y') }}</p>
         </div>
 
         <div class="footer">

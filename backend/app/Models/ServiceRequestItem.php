@@ -9,10 +9,13 @@ class ServiceRequestItem extends Model
 {
     protected $fillable = [
         'service_request_id', 'service_id', 'service_name',
-        'status', 'admin_comment', 'reviewed_by', 'reviewed_at',
+        'status', 'admin_comment', 'quoted_price', 'reviewed_by', 'reviewed_at',
     ];
 
-    protected $casts = ['reviewed_at' => 'datetime'];
+    protected $casts = [
+        'reviewed_at' => 'datetime',
+        'quoted_price' => 'decimal:2',
+    ];
 
     public function serviceRequest()
     {

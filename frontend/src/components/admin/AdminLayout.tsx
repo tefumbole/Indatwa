@@ -1,7 +1,7 @@
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
 import {
-  CheckSquare, ClipboardList, LayoutDashboard, LogOut, Megaphone, Menu, Settings, Users, X,
+  CalendarDays, CheckSquare, ClipboardList, LayoutDashboard, LogOut, Megaphone, Menu, Settings, Shield, Users, X,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
@@ -17,6 +17,7 @@ const NAV_GROUPS = [
     label: 'Operations',
     items: [
       { label: 'Service Requests', href: '/admin/requests', icon: ClipboardList },
+      { label: 'Booking Calendar', href: '/admin/bookings', icon: CalendarDays },
       { label: 'Task Management', href: '/admin/tasks', icon: CheckSquare },
     ],
   },
@@ -30,6 +31,7 @@ const NAV_GROUPS = [
     label: 'Administration',
     items: [
       { label: 'Manage Users', href: '/admin/users', icon: Users },
+      { label: 'Roles & Permissions', href: '/admin/roles', icon: Shield },
       { label: 'Settings', href: '/admin', icon: Settings },
     ],
   },
@@ -49,7 +51,7 @@ export function AdminLayout() {
   const primaryRole = user?.roles?.[0]?.replace(/_/g, ' ') || 'Staff'
 
   return (
-    <div className="min-h-screen bg-slate-100 flex">
+    <div className="admin-console min-h-screen bg-slate-100 flex">
       <aside className={cn(
         'fixed lg:static inset-y-0 left-0 z-40 w-72 bg-ips-blue text-white flex flex-col transition-transform lg:translate-x-0 shadow-xl',
         open ? 'translate-x-0' : '-translate-x-full'

@@ -19,7 +19,7 @@ class ServiceRequest extends Model
         'signature_path', 'pdf_path', 'tracking_token',
         'assigned_to', 'reviewed_by', 'reviewed_at',
         'admin_notes', 'client_notes', 'quoted_amount', 'quotation_notes', 'quotation_sent_at',
-        'submitted_at',
+        'sent_for_signature_at', 'client_signed_at', 'submitted_at',
     ];
 
     protected $casts = [
@@ -28,6 +28,9 @@ class ServiceRequest extends Model
         'event_end_date' => 'date',
         'reviewed_at' => 'datetime',
         'submitted_at' => 'datetime',
+        'quotation_sent_at' => 'datetime',
+        'sent_for_signature_at' => 'datetime',
+        'client_signed_at' => 'datetime',
     ];
 
     public function user()

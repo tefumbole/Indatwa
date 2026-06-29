@@ -120,6 +120,44 @@ class RequestNotificationService
         }
     }
 
+    public function sendClientConfirmed(ServiceRequest $request): void
+    {
+        if (! $this->wasender->isConfigured()) {
+            return;
+        }
+
+        $request->load(['items']);
+        $trackingUrl = config('app.frontend_url').'/track/'.$request->tracking_token;
+        $phone = PhoneFormatter::toE164($request->client_phone);
+
+        if (! $phone) {
+            return;
+        }
+
+        $amount = $request->quoted_amount ? number_format((float) $request->quoted_amount, 0).' RWF' : 'as quoted';
+        $text = "Dear {$request->client_name},\n\n"
+            ."Your quotation for *{$request->reference_number}* ({$request->event_title}) has been confirmed.\n"
+            ."Total: {$amount}\n\n"
+            ."Track your request: {$trackingUrl}\n\n"
+            .config('ips.company_name');
+
+        $this->whatsapp->sendNotification($phone, $text, 'quotation_confirmed', ServiceRequest::class, $request->id);
+
+        $pdfUrl = $this->resolvePdfUrl($request);
+        if ($pdfUrl) {
+            WasenderRateLimiter::beforeAttachment();
+            $this->whatsapp->sendDocument(
+                $phone,
+                $pdfUrl,
+                'confirmed_pdf',
+                'Confirmed quotation PDF — '.$request->reference_number,
+                $request->reference_number.'.pdf',
+                ServiceRequest::class,
+                $request->id,
+            );
+        }
+    }
+
     public function notifyAssignee(ServiceRequest $request, User $assignee): void
     {
         if (! $this->wasender->isConfigured() || ! $assignee->phone) {

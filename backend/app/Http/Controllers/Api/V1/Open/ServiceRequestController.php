@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Open;
 use App\Http\Controllers\Controller;
 use App\Models\Service;
 use App\Models\ServiceRequest;
+use App\Services\Notifications\RequestNotificationService;
 use App\Services\ReferenceNumberService;
 use App\Services\RequestPdfService;
 use Illuminate\Http\JsonResponse;
@@ -142,10 +143,78 @@ class ServiceRequestController extends Controller
                 'services' => $request->items->map(fn ($item) => [
                     'name' => $item->service_name,
                     'status' => $item->status,
+                    'quoted_price' => $item->quoted_price,
                 ]),
+                'quoted_amount' => $request->quoted_amount,
+                'quotation_notes' => $request->quotation_notes,
+                'sent_for_signature_at' => $request->sent_for_signature_at
+                    ? $request->sent_for_signature_at->toIso8601String() : null,
+                'client_signed_at' => $request->client_signed_at
+                    ? $request->client_signed_at->toIso8601String() : null,
+                'can_accept_quotation' => $request->status === 'quotation_prepared'
+                    && $request->sent_for_signature_at
+                    && ! $request->client_signed_at,
                 'documents_count' => $request->documents->count(),
                 'pdf_url' => $this->pdfService->getPublicUrl($request),
                 'submitted_at' => $request->submitted_at->toIso8601String(),
+            ],
+        ]);
+    }
+
+    public function acceptQuotation(Request $request, string $token): JsonResponse
+    {
+        $validated = $request->validate([
+            'signature' => 'required|string',
+        ]);
+
+        $serviceRequest = ServiceRequest::where('tracking_token', $token)->firstOrFail();
+
+        if ($serviceRequest->client_signed_at) {
+            return response()->json(['success' => false, 'message' => 'Quotation already accepted'], 422);
+        }
+
+        if ($serviceRequest->status !== 'quotation_prepared' || ! $serviceRequest->sent_for_signature_at) {
+            return response()->json(['success' => false, 'message' => 'Quotation is not available for acceptance'], 422);
+        }
+
+        $signaturePath = $this->storeSignature($validated['signature'], $serviceRequest->reference_number);
+        if (! $signaturePath) {
+            return response()->json(['success' => false, 'message' => 'Invalid signature'], 422);
+        }
+
+        $fromStatus = $serviceRequest->status;
+        $serviceRequest->update([
+            'signature_path' => $signaturePath,
+            'client_signed_at' => now(),
+            'status' => 'approved',
+        ]);
+
+        DB::table('service_request_status_history')->insert([
+            'service_request_id' => $serviceRequest->id,
+            'from_status' => $fromStatus,
+            'to_status' => 'approved',
+            'comment' => 'Client accepted quotation and signed',
+            'created_at' => now(),
+        ]);
+
+        try {
+            $this->pdfService->generate($serviceRequest->fresh());
+        } catch (\Throwable $e) {
+            Log::error('Confirmed PDF generation failed: '.$e->getMessage());
+        }
+
+        try {
+            app(RequestNotificationService::class)->sendClientConfirmed($serviceRequest->fresh());
+        } catch (\Throwable $e) {
+            Log::error('Client confirmation notification failed: '.$e->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'status' => $serviceRequest->status,
+                'client_signed_at' => $serviceRequest->client_signed_at->toIso8601String(),
+                'pdf_url' => $this->pdfService->getPublicUrl($serviceRequest->fresh()),
             ],
         ]);
     }

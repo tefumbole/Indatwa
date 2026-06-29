@@ -2,50 +2,122 @@ import { AdminTabBar } from '@/components/admin/AdminTabBar'
 import { Button } from '@/components/ui/Button'
 import { Seo } from '@/components/shared/Seo'
 import { useAuth } from '@/context/AuthContext'
-import { api, type AdminRequestSummary } from '@/lib/api'
+import { api, type AdminRequestSummary, type Service } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { Loader2, Search } from 'lucide-react'
+import { Loader2, Plus, Search, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-const STATUSES = [
-  '', 'submitted', 'under_review', 'quotation_prepared',
-  'awaiting_payment', 'approved', 'in_progress', 'completed', 'rejected',
+type WorkflowTab = 'all' | 'awaiting_confirmation' | 'awaiting_client' | 'confirmed'
+
+const WORKFLOW_TABS: { key: WorkflowTab; label: string; color: 'blue' | 'gold' | 'purple' | 'green' }[] = [
+  { key: 'all', label: 'All Services', color: 'blue' },
+  { key: 'awaiting_confirmation', label: 'Awaiting Confirmation', color: 'gold' },
+  { key: 'awaiting_client', label: 'Awaiting Client Confirmation', color: 'purple' },
+  { key: 'confirmed', label: 'Confirmed', color: 'green' },
 ]
+
+const EVENT_TYPES = ['Government / Diplomatic', 'Corporate', 'Wedding', 'Private', 'Other']
 
 export function AdminRequests() {
   const { token } = useAuth()
   const [requests, setRequests] = useState<AdminRequestSummary[]>([])
   const [loading, setLoading] = useState(true)
-  const [status, setStatus] = useState('')
+  const [tab, setTab] = useState<WorkflowTab>('all')
   const [search, setSearch] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
+  const [services, setServices] = useState<Service[]>([])
+  const [creating, setCreating] = useState(false)
+  const [form, setForm] = useState({
+    services: [] as number[],
+    client_name: '',
+    client_phone: '',
+    client_email: '',
+    event_title: '',
+    event_type: EVENT_TYPES[0],
+    event_date: '',
+    venue: '',
+    event_description: '',
+  })
 
   const load = () => {
     if (!token) return
     setLoading(true)
-    api.getAdminRequests(token, { status: status || undefined, search: search || undefined }).then((d) => {
+    api.getAdminRequests(token, { tab: tab === 'all' ? undefined : tab, search: search || undefined }).then((d) => {
       if (d) setRequests(d)
       setLoading(false)
     })
   }
 
-  useEffect(load, [token, status])
+  useEffect(load, [token, tab])
+
+  useEffect(() => {
+    if (showCreate && token) {
+      api.getServices().then((d) => { if (d) setServices(d) })
+    }
+  }, [showCreate, token])
+
+  const toggleService = (id: number) => {
+    setForm((f) => ({
+      ...f,
+      services: f.services.includes(id) ? f.services.filter((s) => s !== id) : [...f.services, id],
+    }))
+  }
+
+  const createRequest = async () => {
+    if (!token || !form.services.length) return
+    setCreating(true)
+    const result = await api.createAdminRequest(token, {
+      services: form.services,
+      client_name: form.client_name,
+      client_phone: form.client_phone,
+      client_email: form.client_email || undefined,
+      event_title: form.event_title,
+      event_type: form.event_type,
+      event_date: form.event_date,
+      venue: form.venue || undefined,
+      event_description: form.event_description || undefined,
+    })
+    setCreating(false)
+    if (result?.success) {
+      setShowCreate(false)
+      setForm({
+        services: [],
+        client_name: '',
+        client_phone: '',
+        client_email: '',
+        event_title: '',
+        event_type: EVENT_TYPES[0],
+        event_date: '',
+        venue: '',
+        event_description: '',
+      })
+      load()
+    }
+  }
 
   return (
     <>
       <Seo title="Manage Requests" path="/admin/requests" />
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-ips-blue mb-2">Service Requests</h1>
-        <p className="text-slate-600 text-sm mb-6">Review, approve, or deny client inquiries</p>
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-ips-blue mb-2">Service Requests</h1>
+            <p className="text-slate-600 text-sm">Review client requests, prepare quotations, and confirm bookings</p>
+          </div>
+          <Button size="sm" className="gap-2" onClick={() => setShowCreate(true)}>
+            <Plus size={16} /> Create Request
+          </Button>
+        </div>
 
         <AdminTabBar
           section="Operations"
-          tabs={[
-            { label: 'All Requests', active: !status, onClick: () => setStatus(''), color: 'blue' },
-            { label: 'Submitted', active: status === 'submitted', onClick: () => setStatus('submitted'), color: 'gold' },
-            { label: 'Under Review', active: status === 'under_review', onClick: () => setStatus('under_review'), color: 'purple' },
-            { label: 'In Progress', active: status === 'in_progress', onClick: () => setStatus('in_progress'), color: 'green' },
-          ]}
+          tabs={WORKFLOW_TABS.map((t) => ({
+            label: t.label,
+            active: tab === t.key,
+            onClick: () => setTab(t.key),
+            color: t.color,
+          }))}
         />
 
         <div className="flex flex-wrap gap-3 mb-6">
@@ -59,16 +131,6 @@ export function AdminRequests() {
               onKeyDown={(e) => e.key === 'Enter' && load()}
             />
           </div>
-          <select
-            className="px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm form-select-light outline-none"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="">All statuses</option>
-            {STATUSES.filter(Boolean).map((s) => (
-              <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
-            ))}
-          </select>
           <Button size="sm" onClick={load}>Search</Button>
         </div>
 
@@ -83,6 +145,7 @@ export function AdminRequests() {
                   <th className="px-4 py-3 font-medium hidden sm:table-cell">Client</th>
                   <th className="px-4 py-3 font-medium hidden md:table-cell">Event</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium hidden lg:table-cell">Amount</th>
                   <th className="px-4 py-3 font-medium hidden lg:table-cell">Submitted</th>
                 </tr>
               </thead>
@@ -98,21 +161,66 @@ export function AdminRequests() {
                     <td className="px-4 py-3 hidden md:table-cell truncate max-w-[200px]">{req.event_title}</td>
                     <td className="px-4 py-3">
                       <span className={cn('text-xs px-2 py-1 rounded-full capitalize', 'bg-slate-100 dark:bg-slate-800')}>
-                        {req.status.replace(/_/g, ' ')}
+                        {req.client_signed_at ? 'confirmed' : req.status.replace(/_/g, ' ')}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 hidden lg:table-cell text-slate-600">
+                      {req.quoted_amount ? `${Number(req.quoted_amount).toLocaleString()} RWF` : '—'}
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell text-slate-500">
                       {new Date(req.submitted_at).toLocaleDateString()}
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={5} className="px-4 py-12 text-center text-slate-400">No requests found.</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400">No requests in this tab.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b">
+              <h2 className="font-bold text-lg text-ips-blue">Create Service Request</h2>
+              <button onClick={() => setShowCreate(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-medium text-slate-500 mb-2 block">Services *</label>
+                <div className="space-y-1 max-h-32 overflow-y-auto border rounded-lg p-2">
+                  {services.map((s) => (
+                    <label key={s.id} className="flex items-center gap-2 text-sm p-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                      <input type="checkbox" checked={form.services.includes(s.id)} onChange={() => toggleService(s.id)} />
+                      {s.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <input className="px-3 py-2 rounded-lg border text-sm" placeholder="Client name *" value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} />
+                <input className="px-3 py-2 rounded-lg border text-sm" placeholder="Phone *" value={form.client_phone} onChange={(e) => setForm({ ...form, client_phone: e.target.value })} />
+                <input className="px-3 py-2 rounded-lg border text-sm sm:col-span-2" placeholder="Email" value={form.client_email} onChange={(e) => setForm({ ...form, client_email: e.target.value })} />
+                <input className="px-3 py-2 rounded-lg border text-sm sm:col-span-2" placeholder="Event title *" value={form.event_title} onChange={(e) => setForm({ ...form, event_title: e.target.value })} />
+                <select className="px-3 py-2 rounded-lg border text-sm form-select-light" value={form.event_type} onChange={(e) => setForm({ ...form, event_type: e.target.value })}>
+                  {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <input className="px-3 py-2 rounded-lg border text-sm" type="date" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} />
+                <input className="px-3 py-2 rounded-lg border text-sm sm:col-span-2" placeholder="Venue" value={form.venue} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
+                <textarea className="px-3 py-2 rounded-lg border text-sm sm:col-span-2 min-h-[80px]" placeholder="Event description" value={form.event_description} onChange={(e) => setForm({ ...form, event_description: e.target.value })} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 p-5 border-t">
+              <Button variant="outline" size="sm" onClick={() => setShowCreate(false)}>Cancel</Button>
+              <Button size="sm" onClick={createRequest} disabled={creating || !form.client_name || !form.client_phone || !form.event_title || !form.event_date || !form.services.length}>
+                {creating ? 'Creating...' : 'Create Request'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

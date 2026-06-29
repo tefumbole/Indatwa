@@ -21,7 +21,7 @@ export function AdminUsers() {
 
   const load = () => {
     if (!token) return
-    Promise.all([api.getAdminUsers(token), api.getAdminRoles(token)]).then(([u, r]) => {
+    Promise.all([api.getAdminUsers(token), api.getStaffRoleOptions(token)]).then(([u, r]) => {
       if (u) setUsers(u)
       if (r) setRoles(r)
       setLoading(false)
@@ -77,6 +77,7 @@ export function AdminUsers() {
           tabs={[
             { label: 'User List', active: true, color: 'blue' },
             { label: 'Add User', onClick: () => setShowForm(true), icon: Plus, color: 'gold' },
+            { label: 'Roles & Permissions', href: '/admin/roles', color: 'purple' },
           ]}
         />
 
@@ -92,7 +93,7 @@ export function AdminUsers() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Role *</label>
                 <select
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  className="admin-input w-full px-4 py-2.5 rounded-xl border text-sm form-select-light"
                   value={form.roles[0]}
                   onChange={(e) => setForm({ ...form, roles: [e.target.value] })}
                 >
@@ -175,10 +176,10 @@ function Field({ label, value, onChange, type = 'text' }: {
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
+      <label className="admin-label block text-sm font-medium mb-1.5">{label}</label>
       <input
         type={type}
-        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-ips-blue/20 focus:border-ips-blue"
+        className="admin-input w-full px-4 py-2.5 rounded-xl border text-sm"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />

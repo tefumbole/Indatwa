@@ -2,8 +2,8 @@ import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
 import { api, type AdminRequestDetail, type StaffMember } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { ArrowLeft, Download, Loader2, Save } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ArrowLeft, CheckCircle, Download, Loader2, Save } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 const STATUSES = [
@@ -26,8 +26,14 @@ export function AdminRequestDetail() {
   const [assignId, setAssignId] = useState<string>('')
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
-  const [quotedAmount, setQuotedAmount] = useState('')
   const [quotationNotes, setQuotationNotes] = useState('')
+  const [itemPrices, setItemPrices] = useState<Record<number, string>>({})
+  const [scheduleUserIds, setScheduleUserIds] = useState<number[]>([])
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [startTime, setStartTime] = useState('')
+  const [endTime, setEndTime] = useState('')
+  const [scheduleNotes, setScheduleNotes] = useState('')
 
   const load = () => {
     if (!token || !id) return
@@ -40,6 +46,14 @@ export function AdminRequestDetail() {
         setStatus(req.status)
         setNotes(req.admin_notes || '')
         setAssignId(req.assigned_to?.id ? String(req.assigned_to.id) : '')
+        setQuotationNotes(req.quotation_notes || '')
+        const prices: Record<number, string> = {}
+        req.services.forEach((s) => {
+          if (s.quoted_price != null) prices[s.id] = String(s.quoted_price)
+        })
+        setItemPrices(prices)
+        if (req.event_start_date) setStartDate(req.event_start_date)
+        if (req.event_end_date) setEndDate(req.event_end_date)
       }
       if (st) setStaff(st)
       setLoading(false)
@@ -47,6 +61,20 @@ export function AdminRequestDetail() {
   }
 
   useEffect(load, [token, id])
+
+  const approvedServices = useMemo(
+    () => data?.services.filter((s) => s.status === 'approved') ?? [],
+    [data]
+  )
+
+  const computedTotal = useMemo(() => {
+    return approvedServices.reduce((sum, s) => {
+      const price = Number(itemPrices[s.id] || 0)
+      return sum + (Number.isFinite(price) ? price : 0)
+    }, 0)
+  }, [approvedServices, itemPrices])
+
+  const isConfirmed = Boolean(data?.client_signed_at)
 
   const saveStatus = async () => {
     if (!token || !id) return
@@ -75,7 +103,20 @@ export function AdminRequestDetail() {
   const reviewItem = async (itemId: number, itemStatus: string) => {
     if (!token || !id) return
     const comment = window.prompt('Comment (optional):') || undefined
-    await api.updateAdminRequestItem(token, Number(id), itemId, { status: itemStatus, admin_comment: comment })
+    const quoted_price = itemPrices[itemId] ? Number(itemPrices[itemId]) : undefined
+    await api.updateAdminRequestItem(token, Number(id), itemId, {
+      status: itemStatus,
+      admin_comment: comment,
+      quoted_price,
+    })
+    load()
+  }
+
+  const acceptAll = async () => {
+    if (!token || !id) return
+    setSaving(true)
+    await api.acceptAllAdminServices(token, Number(id))
+    setSaving(false)
     load()
   }
 
@@ -86,16 +127,42 @@ export function AdminRequestDetail() {
     load()
   }
 
-  const sendQuotation = async () => {
-    if (!token || !id || !quotedAmount) return
+  const sendQuotation = async (forSignature: boolean) => {
+    if (!token || !id) return
     setSaving(true)
     await api.setAdminQuotation(token, Number(id), {
-      quoted_amount: Number(quotedAmount),
+      quoted_amount: computedTotal,
       quotation_notes: quotationNotes || undefined,
       send_to_client: true,
+      send_for_signature: forSignature,
+      items: approvedServices.map((s) => ({
+        id: s.id,
+        quoted_price: Number(itemPrices[s.id] || 0),
+      })),
     })
     setSaving(false)
     load()
+  }
+
+  const saveSchedule = async () => {
+    if (!token || !id || !scheduleUserIds.length || !startDate) return
+    setSaving(true)
+    await api.assignAdminSchedule(token, Number(id), {
+      assigned_user_ids: scheduleUserIds,
+      start_date: startDate,
+      end_date: endDate || undefined,
+      start_time: startTime || undefined,
+      end_time: endTime || undefined,
+      notes: scheduleNotes || undefined,
+    })
+    setSaving(false)
+    load()
+  }
+
+  const toggleScheduleUser = (userId: number) => {
+    setScheduleUserIds((ids) =>
+      ids.includes(userId) ? ids.filter((i) => i !== userId) : [...ids, userId]
+    )
   }
 
   if (loading) {
@@ -105,6 +172,8 @@ export function AdminRequestDetail() {
   if (!data) {
     return <p>Request not found.</p>
   }
+
+  const hasPending = data.services.some((s) => s.status === 'pending')
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -118,6 +187,11 @@ export function AdminRequestDetail() {
             <p className="font-mono font-bold text-lg text-ips-blue">{data.reference_number}</p>
             <h1 className="font-display text-xl font-bold">{data.event_title}</h1>
             <p className="text-sm text-slate-500">{data.client_name} — {data.client_phone}</p>
+            {isConfirmed && (
+              <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                <CheckCircle size={14} /> Client confirmed {new Date(data.client_signed_at!).toLocaleString()}
+              </p>
+            )}
           </div>
           <Button variant="outline" size="sm" className="gap-1" onClick={() => token && api.downloadAdminPdf(token, data.id, data.reference_number)}>
             <Download size={14} /> PDF
@@ -129,6 +203,7 @@ export function AdminRequestDetail() {
           <div><span className="text-slate-500">Type:</span> {data.event_type}</div>
           {data.venue && <div><span className="text-slate-500">Venue:</span> {data.venue}</div>}
           {data.client_email && <div><span className="text-slate-500">Email:</span> {data.client_email}</div>}
+          {data.event_description && <div className="sm:col-span-2"><span className="text-slate-500">Description:</span> {data.event_description}</div>}
         </div>
 
         <div className="flex flex-wrap gap-2 mb-4">
@@ -154,47 +229,113 @@ export function AdminRequestDetail() {
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border mb-6">
-        <h3 className="font-semibold mb-3">Services</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h3 className="font-semibold">Services</h3>
+          {hasPending && (
+            <Button size="sm" variant="outline" onClick={acceptAll} disabled={saving}>
+              Accept All Pending
+            </Button>
+          )}
+        </div>
         <div className="space-y-2">
           {data.services.map((s) => (
             <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-sm">
-              <div>
+              <div className="flex-1 min-w-[140px]">
                 <p className="font-medium">{s.name}</p>
                 {s.admin_comment && <p className="text-xs text-slate-500">{s.admin_comment}</p>}
               </div>
-              <div className="flex gap-2">
+              {s.status === 'approved' && (
+                <input
+                  className="w-28 px-2 py-1.5 rounded border text-sm"
+                  type="number"
+                  min={0}
+                  placeholder="Price RWF"
+                  value={itemPrices[s.id] ?? ''}
+                  onChange={(e) => setItemPrices({ ...itemPrices, [s.id]: e.target.value })}
+                />
+              )}
+              <div className="flex gap-2 items-center">
                 <span className={cn('text-xs px-2 py-1 rounded capitalize', s.status === 'approved' ? 'bg-green-100 text-green-700' : s.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}>{s.status}</span>
-                <Button size="sm" variant="outline" onClick={() => reviewItem(s.id, 'approved')}>Approve</Button>
-                <Button size="sm" variant="outline" onClick={() => reviewItem(s.id, 'rejected')}>Reject</Button>
+                {s.status === 'pending' && (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => reviewItem(s.id, 'approved')}>Approve</Button>
+                    <Button size="sm" variant="outline" onClick={() => reviewItem(s.id, 'rejected')}>Reject</Button>
+                  </>
+                )}
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border mb-6">
-        <h3 className="font-semibold mb-3">Quotation & Invoice</h3>
-        <p className="text-xs text-slate-500 mb-3">Prepare a quotation after reviewing the inquiry. Client signs and pays after accepting.</p>
-        <div className="grid sm:grid-cols-2 gap-3 mb-3">
-          <input
-            className="px-3 py-2 rounded-lg border text-sm"
-            type="number"
-            min={0}
-            placeholder="Quoted amount (RWF)"
-            value={quotedAmount}
-            onChange={(e) => setQuotedAmount(e.target.value)}
-          />
-          <input
-            className="px-3 py-2 rounded-lg border text-sm sm:col-span-1"
+      {approvedServices.length > 0 && !isConfirmed && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border mb-6">
+          <h3 className="font-semibold mb-3">Quotation & Invoice</h3>
+          <p className="text-xs text-slate-500 mb-3">Set a price per approved service, then send the quotation to the client for signature.</p>
+          <div className="flex items-center justify-between text-sm mb-3 p-3 rounded-lg bg-ips-blue/5">
+            <span className="font-medium">Total</span>
+            <span className="font-bold text-ips-blue">{computedTotal.toLocaleString()} RWF</span>
+          </div>
+          <textarea
+            className="w-full px-3 py-2 rounded-lg border text-sm min-h-[80px] mb-3"
             placeholder="Quotation notes"
             value={quotationNotes}
             onChange={(e) => setQuotationNotes(e.target.value)}
           />
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => sendQuotation(true)} disabled={saving || computedTotal <= 0}>
+              Send to Client for Signature
+            </Button>
+            {data.sent_for_signature_at && (
+              <span className="text-xs text-slate-500 self-center">
+                Sent {new Date(data.sent_for_signature_at).toLocaleString()}
+              </span>
+            )}
+          </div>
         </div>
-        <Button size="sm" onClick={sendQuotation} disabled={saving || !quotedAmount}>
-          Send Quotation & Create Invoice
-        </Button>
-      </div>
+      )}
+
+      {isConfirmed && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border mb-6">
+          <h3 className="font-semibold mb-3">Schedule Assignment</h3>
+          <p className="text-xs text-slate-500 mb-3">Assign staff and date/time range. Booked dates appear on the Booking Calendar.</p>
+          <div className="space-y-3 mb-4">
+            <div className="flex flex-wrap gap-2">
+              {staff.map((s) => (
+                <label key={s.id} className={cn(
+                  'text-xs px-3 py-1.5 rounded-full border cursor-pointer',
+                  scheduleUserIds.includes(s.id) ? 'bg-ips-gold text-ips-blue border-ips-gold' : 'border-slate-200'
+                )}>
+                  <input type="checkbox" className="sr-only" checked={scheduleUserIds.includes(s.id)} onChange={() => toggleScheduleUser(s.id)} />
+                  {s.name}
+                </label>
+              ))}
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <input className="px-3 py-2 rounded-lg border text-sm" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <input className="px-3 py-2 rounded-lg border text-sm" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="End date" />
+              <input className="px-3 py-2 rounded-lg border text-sm" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <input className="px-3 py-2 rounded-lg border text-sm" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            </div>
+            <textarea className="w-full px-3 py-2 rounded-lg border text-sm min-h-[60px]" placeholder="Assignment notes" value={scheduleNotes} onChange={(e) => setScheduleNotes(e.target.value)} />
+          </div>
+          <Button size="sm" onClick={saveSchedule} disabled={saving || !scheduleUserIds.length || !startDate}>
+            Assign Schedule
+          </Button>
+
+          {data.assignments && data.assignments.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-medium text-slate-500 uppercase">Previous assignments</p>
+              {data.assignments.map((a) => (
+                <div key={a.id} className="text-sm p-2 rounded bg-slate-50 dark:bg-slate-800/50">
+                  {a.start_date}{a.end_date && a.end_date !== a.start_date ? ` — ${a.end_date}` : ''}
+                  {a.start_time && ` · ${a.start_time}`}{a.end_time && `–${a.end_time}`}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border mb-6">
         <h3 className="font-semibold mb-3">Internal Notes</h3>

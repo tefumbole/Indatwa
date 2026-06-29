@@ -9,7 +9,8 @@ import { useEffect, useState } from 'react'
 
 type Mode = 'compose' | 'list' | 'scheduled' | 'settings'
 
-const adminSelectClass = 'w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm outline-none focus:ring-2 focus:ring-ips-blue/20'
+const adminSelectClass = 'admin-input w-full px-4 py-2.5 rounded-xl border text-sm form-select-light'
+const adminFieldClass = 'admin-input w-full px-4 py-2.5 rounded-xl border text-sm'
 
 export function AdminAnnouncements() {
   const { token } = useAuth()
@@ -133,19 +134,19 @@ export function AdminAnnouncements() {
         {mode === 'compose' && (
           <div className="admin-card p-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5">Title *</label>
-              <input className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Event reminder, promotion..." />
+              <label className="admin-label block text-sm font-medium mb-1.5">Title *</label>
+              <input className={adminFieldClass} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Event reminder, promotion..." />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">Header (optional)</label>
-              <input className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm" value={form.header} onChange={(e) => setForm({ ...form, header: e.target.value })} placeholder="*Indatwa Protocol & Services*" />
+              <label className="admin-label block text-sm font-medium mb-1.5">Header (optional)</label>
+              <input className={adminFieldClass} value={form.header} onChange={(e) => setForm({ ...form, header: e.target.value })} placeholder="*Indatwa Protocol & Services*" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">Message body *</label>
-              <textarea className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm resize-none" rows={6} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Hello {name}, ... Tokens: {name} {phone} {email} {reference} {date}" />
+              <label className="admin-label block text-sm font-medium mb-1.5">Message body *</label>
+              <textarea className={`${adminFieldClass} resize-none`} rows={6} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Hello {name}, ... Tokens: {name} {phone} {email} {reference} {date}" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">Audience</label>
+              <label className="admin-label block text-sm font-medium mb-1.5">Audience</label>
               <select className={adminSelectClass} value={form.audience_type} onChange={(e) => setForm({ ...form, audience_type: e.target.value as typeof form.audience_type })}>
                 <option value="clients">All clients (from service requests)</option>
                 <option value="staff">All staff</option>
@@ -154,8 +155,8 @@ export function AdminAnnouncements() {
             </div>
             {form.audience_type === 'custom' && (
               <div className="grid sm:grid-cols-2 gap-3">
-                <input className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm" placeholder="Name" value={form.custom_name} onChange={(e) => setForm({ ...form, custom_name: e.target.value })} />
-                <input className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm" placeholder="Phone +250..." value={form.custom_phone} onChange={(e) => setForm({ ...form, custom_phone: e.target.value })} />
+                <input className={adminFieldClass} placeholder="Name" value={form.custom_name} onChange={(e) => setForm({ ...form, custom_name: e.target.value })} />
+                <input className={adminFieldClass} placeholder="Phone +250..." value={form.custom_phone} onChange={(e) => setForm({ ...form, custom_phone: e.target.value })} />
               </div>
             )}
             <div>

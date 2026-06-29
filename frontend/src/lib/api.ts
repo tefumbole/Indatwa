@@ -234,6 +234,9 @@ export interface AdminRequestSummary {
   submitted_at: string
   items_count: number
   assigned_to?: number | null
+  quoted_amount?: number | null
+  client_signed_at?: string | null
+  sent_for_signature_at?: string | null
 }
 
 export interface AdminRequestDetail {
@@ -259,12 +262,40 @@ export interface AdminRequestDetail {
   admin_notes: string | null
   client_notes: string | null
   assigned_to: { id: number; name: string; email?: string } | null
-  services: { id: number; name: string; status: string; admin_comment: string | null }[]
+  services: { id: number; name: string; status: string; admin_comment: string | null; quoted_price?: number | null }[]
   documents: { id: number; type: string; name: string; uploaded_at: string }[]
   status_history: { from_status: string | null; to_status: string; created_at: string; note?: string }[]
   messages: { id: number; message: string; is_internal: boolean; sender: { id: number; name: string }; created_at: string }[]
   pdf_url: string | null
   tracking_url: string
+  quoted_amount?: number | null
+  quotation_notes?: string | null
+  sent_for_signature_at?: string | null
+  client_signed_at?: string | null
+  assignments?: ServiceAssignment[]
+}
+
+export interface ServiceAssignment {
+  id: number
+  assigned_user_ids: number[]
+  start_date: string
+  end_date: string | null
+  start_time: string | null
+  end_time: string | null
+  notes: string | null
+}
+
+export interface BookingCalendarDay {
+  date: string
+  is_booked: boolean
+  label?: string | null
+  notes?: string | null
+  service_request?: {
+    id: number
+    reference_number: string
+    event_title: string
+    client_name: string
+  } | null
 }
 
 export interface StaffMember {
@@ -289,6 +320,29 @@ export interface RoleOption {
   id: number
   name: string
   display_name: string
+}
+
+export interface RolePermission {
+  id: number
+  name: string
+  module: string
+  label: string
+}
+
+export interface RoleDetail {
+  id: number
+  name: string
+  display_name: string
+  description: string | null
+  is_protected: boolean
+  users_count: number
+  permissions: RolePermission[]
+}
+
+export interface PermissionGroup {
+  module: string
+  label: string
+  permissions: { id: number; name: string; label: string }[]
 }
 
 export interface StaffTask {
@@ -355,10 +409,15 @@ export interface TrackRequestResult {
   event_date: string
   event_type: string
   venue: string | null
-  services: { name: string; status: string }[]
+  services: { name: string; status: string; quoted_price?: number | null }[]
   documents_count: number
   pdf_url: string | null
   submitted_at: string
+  quoted_amount?: number | null
+  quotation_notes?: string | null
+  sent_for_signature_at?: string | null
+  client_signed_at?: string | null
+  can_accept_quotation?: boolean
 }
 
 function buildRequestFormData(data: RequestFormData): FormData {
@@ -433,6 +492,9 @@ export const api = {
 
   trackRequest: (token: string) => fetchApi<TrackRequestResult>(`/track/${token}`),
 
+  acceptQuotation: (token: string, signature: string) =>
+    postApi<{ status: string; client_signed_at: string; pdf_url: string | null }>(`/track/${token}/accept`, { signature }),
+
   getPdfDownloadUrl: (token: string) => `${API_BASE}/track/${token}/pdf`,
 
   // Auth
@@ -503,8 +565,9 @@ export const api = {
   // Admin
   getAdminDashboard: (token: string) => authFetch<AdminDashboardData>('/admin/dashboard', token),
 
-  getAdminRequests: (token: string, params?: { status?: string; search?: string; page?: number }) => {
+  getAdminRequests: (token: string, params?: { tab?: string; status?: string; search?: string; page?: number }) => {
     const qs = new URLSearchParams()
+    if (params?.tab) qs.set('tab', params.tab)
     if (params?.status) qs.set('status', params.status)
     if (params?.search) qs.set('search', params.search)
     if (params?.page) qs.set('page', String(params.page))
@@ -512,13 +575,50 @@ export const api = {
     return authFetch<AdminRequestSummary[]>(`/admin/requests${query}`, token)
   },
 
+  createAdminRequest: (token: string, data: {
+    services: number[]
+    client_name: string
+    client_phone: string
+    client_email?: string
+    event_title: string
+    event_type: string
+    event_date: string
+    venue?: string
+    event_description?: string
+  }) => postAuthApi<AdminRequestSummary>('/admin/requests', data, token),
+
+  acceptAllAdminServices: (token: string, id: number) =>
+    postApi(`/admin/requests/${id}/accept-all`, {}, token),
+
+  assignAdminSchedule: (token: string, id: number, data: {
+    assigned_user_ids: number[]
+    start_date: string
+    end_date?: string
+    start_time?: string
+    end_time?: string
+    notes?: string
+  }) => postApi(`/admin/requests/${id}/assign-schedule`, data, token),
+
+  getBookingCalendar: (token: string, year: number, month: number) =>
+    authFetch<{ year: number; month: number; booked_dates: BookingCalendarDay[] }>(
+      `/admin/bookings/calendar?year=${year}&month=${month}`, token
+    ),
+
+  toggleBookingDate: (token: string, data: {
+    date: string
+    is_booked: boolean
+    service_request_id?: number
+    label?: string
+    notes?: string
+  }) => postApi('/admin/bookings/calendar/toggle', data, token),
+
   getAdminRequest: (token: string, id: number) =>
     authFetch<AdminRequestDetail>(`/admin/requests/${id}`, token),
 
   updateAdminRequestStatus: (token: string, id: number, status: string, note?: string) =>
     patchApi(`/admin/requests/${id}/status`, { status, note }, token),
 
-  updateAdminRequestItem: (token: string, id: number, itemId: number, data: { status: string; admin_comment?: string }) =>
+  updateAdminRequestItem: (token: string, id: number, itemId: number, data: { status: string; admin_comment?: string; quoted_price?: number }) =>
     patchApi(`/admin/requests/${id}/items/${itemId}`, data, token),
 
   updateAdminNotes: (token: string, id: number, admin_notes: string) =>
@@ -530,8 +630,13 @@ export const api = {
   addAdminMessage: (token: string, id: number, message: string, is_internal = true) =>
     postApi(`/admin/requests/${id}/messages`, { message, is_internal }, token),
 
-  setAdminQuotation: (token: string, id: number, data: { quoted_amount: number; quotation_notes?: string; send_to_client?: boolean }) =>
-    postApi(`/admin/requests/${id}/quotation`, data, token),
+  setAdminQuotation: (token: string, id: number, data: {
+    quoted_amount?: number
+    quotation_notes?: string
+    send_to_client?: boolean
+    send_for_signature?: boolean
+    items?: { id: number; quoted_price?: number }[]
+  }) => postApi(`/admin/requests/${id}/quotation`, data, token),
 
   updateReviewsEnabled: (token: string, enabled: boolean) =>
     patchApi('/admin/settings/reviews', { enabled }, token),
@@ -540,7 +645,26 @@ export const api = {
 
   getAdminUsers: (token: string) => authFetch<AdminUser[]>('/admin/users', token),
 
-  getAdminRoles: (token: string) => authFetch<RoleOption[]>('/admin/users/roles', token),
+  getStaffRoleOptions: (token: string) => authFetch<RoleOption[]>('/admin/users/roles', token),
+
+  getAdminRoles: (token: string) => authFetch<RoleDetail[]>('/admin/roles', token),
+
+  getPermissionGroups: (token: string) => authFetch<PermissionGroup[]>('/admin/roles/permissions', token),
+
+  createAdminRole: (token: string, data: {
+    display_name: string
+    name?: string
+    description?: string
+    permission_ids?: number[]
+  }) => postAuthApi<RoleDetail>('/admin/roles', data, token),
+
+  updateAdminRole: (token: string, id: number, data: {
+    display_name?: string
+    description?: string
+    permission_ids?: number[]
+  }) => patchApi(`/admin/roles/${id}`, data, token),
+
+  deleteAdminRole: (token: string, id: number) => deleteApi(`/admin/roles/${id}`, token),
 
   createAdminUser: (token: string, data: {
     name: string; phone: string; password: string; email?: string; username?: string; roles: string[]

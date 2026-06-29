@@ -1,3 +1,4 @@
+import { SignaturePad } from '@/components/request/SignaturePad'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Seo } from '@/components/shared/Seo'
 import { Button } from '@/components/ui/Button'
@@ -12,8 +13,7 @@ const STATUS_STEPS = [
   { key: 'submitted', label: 'Submitted' },
   { key: 'under_review', label: 'Under Review' },
   { key: 'quotation_prepared', label: 'Quotation Prepared' },
-  { key: 'awaiting_payment', label: 'Awaiting Payment' },
-  { key: 'approved', label: 'Approved' },
+  { key: 'approved', label: 'Confirmed' },
   { key: 'in_progress', label: 'In Progress' },
   { key: 'completed', label: 'Completed' },
 ]
@@ -21,7 +21,7 @@ const STATUS_STEPS = [
 const STATUS_INDEX: Record<string, number> = Object.fromEntries(STATUS_STEPS.map((s, i) => [s.key, i]))
 
 function StatusTimeline({ status }: { status: string }) {
-  const currentIndex = STATUS_INDEX[status] ?? 0
+  const currentIndex = STATUS_INDEX[status] ?? (status === 'awaiting_payment' ? 3 : 0)
   const isRejected = status === 'rejected'
 
   if (isRejected) {
@@ -69,15 +69,33 @@ export function TrackRequestPage() {
   const [data, setData] = useState<TrackRequestResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [signature, setSignature] = useState('')
+  const [accepting, setAccepting] = useState(false)
+  const [acceptError, setAcceptError] = useState('')
 
-  useEffect(() => {
+  const reload = () => {
     if (!token) return
     api.trackRequest(token).then((result) => {
       if (result) setData(result)
       else setNotFound(true)
       setLoading(false)
     })
-  }, [token])
+  }
+
+  useEffect(reload, [token])
+
+  const acceptQuotation = async () => {
+    if (!token || !signature) {
+      setAcceptError('Please sign to accept the quotation')
+      return
+    }
+    setAccepting(true)
+    setAcceptError('')
+    const result = await api.acceptQuotation(token, signature)
+    setAccepting(false)
+    if (result?.success) reload()
+    else setAcceptError(result?.message || 'Could not accept quotation')
+  }
 
   if (loading) {
     return (
@@ -135,18 +153,54 @@ export function TrackRequestPage() {
                   {data.services.map((s, i) => (
                     <li key={i} className="flex items-center justify-between text-sm p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
                       <span className="flex items-center gap-2"><FileText size={14} className="text-ips-blue" />{s.name}</span>
-                      <span className={cn(
-                        'text-xs px-2 py-0.5 rounded-full font-medium',
-                        s.status === 'approved' ? 'bg-green-100 text-green-700' :
-                        s.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                        'bg-yellow-100 text-yellow-700'
-                      )}>
-                        {s.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {s.quoted_price != null && (
+                          <span className="text-xs text-slate-500">{Number(s.quoted_price).toLocaleString()} RWF</span>
+                        )}
+                        <span className={cn(
+                          'text-xs px-2 py-0.5 rounded-full font-medium',
+                          s.status === 'approved' ? 'bg-green-100 text-green-700' :
+                          s.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        )}>
+                          {s.status}
+                        </span>
+                      </div>
                     </li>
                   ))}
                 </ul>
+                {data.quoted_amount != null && (
+                  <p className="mt-4 text-right font-bold text-ips-blue">
+                    Total: {Number(data.quoted_amount).toLocaleString()} RWF
+                  </p>
+                )}
+                {data.quotation_notes && (
+                  <p className="mt-2 text-xs text-slate-500">{data.quotation_notes}</p>
+                )}
               </div>
+
+              {data.can_accept_quotation && (
+                <div className="glass rounded-2xl p-6 border-2 border-ips-gold/40">
+                  <h3 className="font-semibold text-ips-blue dark:text-white mb-2">Accept Quotation</h3>
+                  <p className="text-sm text-slate-500 mb-4">
+                    Review the quotation above and sign below to confirm your booking.
+                  </p>
+                  <SignaturePad value={signature} onChange={setSignature} error={acceptError} />
+                  <Button className="w-full mt-4" onClick={acceptQuotation} disabled={accepting}>
+                    {accepting ? 'Confirming...' : 'Sign & Confirm Quotation'}
+                  </Button>
+                </div>
+              )}
+
+              {data.client_signed_at && (
+                <div className="glass rounded-2xl p-4 flex items-center gap-3 text-green-700 bg-green-50 dark:bg-green-900/20">
+                  <CheckCircle size={20} />
+                  <div>
+                    <p className="font-medium text-sm">Quotation confirmed</p>
+                    <p className="text-xs">{new Date(data.client_signed_at).toLocaleString()}</p>
+                  </div>
+                </div>
+              )}
 
               {pdfUrl && (
                 <a href={pdfUrl} target="_blank" rel="noopener noreferrer">

@@ -62,6 +62,34 @@
     @apply bg-white rounded-2xl shadow-sm border border-slate-100;
   }
 
+  /* Admin console always uses light form styling (fixes dark-mode white-on-white inputs) */
+  .admin-console {
+    @apply text-slate-800;
+  }
+
+  .admin-console .admin-card {
+    @apply bg-white text-slate-800;
+  }
+
+  .admin-console label,
+  .admin-console .admin-label {
+    @apply text-slate-700;
+  }
+
+  .admin-console input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+  .admin-console textarea,
+  .admin-console select,
+  .admin-input {
+    @apply bg-white text-slate-900 border-slate-200 placeholder:text-slate-400;
+  }
+
+  .admin-console input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):focus,
+  .admin-console textarea:focus,
+  .admin-console select:focus,
+  .admin-input:focus {
+    @apply outline-none ring-2 ring-ips-blue/20 border-ips-blue;
+  }
+
   .request-page-bg {
     background: linear-gradient(160deg, #051a45 0%, #0B3D91 45%, #082d6b 100%);
   }

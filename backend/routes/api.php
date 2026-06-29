@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\AdminAnnouncementController;
+use App\Http\Controllers\Api\V1\Admin\AdminBookingController;
 use App\Http\Controllers\Api\V1\Admin\AdminDashboardController;
+use App\Http\Controllers\Api\V1\Admin\AdminRoleController;
 use App\Http\Controllers\Api\V1\Admin\AdminRequestController;
 use App\Http\Controllers\Api\V1\Admin\AdminSettingsController;
 use App\Http\Controllers\Api\V1\Admin\AdminTaskController;
@@ -27,6 +29,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/service-categories', [ServiceController::class, 'categories']);
     Route::post('/requests/submit', [ServiceRequestController::class, 'submit'])->middleware('auth.optional');
     Route::get('/track/{token}', [ServiceRequestController::class, 'track']);
+    Route::post('/track/{token}/accept', [ServiceRequestController::class, 'acceptQuotation']);
     Route::get('/track/{token}/pdf', [ServiceRequestController::class, 'downloadPdf']);
     Route::get('/settings/public', [SiteController::class, 'publicSettings']);
     Route::get('/testimonials', [SiteController::class, 'testimonials']);
@@ -79,6 +82,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/dashboard', [AdminDashboardController::class, 'index']);
         Route::get('/staff', [AdminRequestController::class, 'staff']);
         Route::get('/requests', [AdminRequestController::class, 'index']);
+        Route::post('/requests', [AdminRequestController::class, 'store']);
         Route::get('/requests/{id}', [AdminRequestController::class, 'show']);
         Route::get('/requests/{id}/pdf', [AdminRequestController::class, 'downloadPdf']);
         Route::patch('/requests/{id}/status', [AdminRequestController::class, 'updateStatus']);
@@ -87,6 +91,10 @@ Route::prefix('v1')->group(function () {
         Route::patch('/requests/{id}/assign', [AdminRequestController::class, 'assign']);
         Route::post('/requests/{id}/messages', [AdminRequestController::class, 'addMessage']);
         Route::post('/requests/{id}/quotation', [AdminRequestController::class, 'setQuotation']);
+        Route::post('/requests/{id}/accept-all', [AdminRequestController::class, 'acceptAll']);
+        Route::post('/requests/{id}/assign-schedule', [AdminRequestController::class, 'assignSchedule']);
+        Route::get('/bookings/calendar', [AdminBookingController::class, 'month']);
+        Route::post('/bookings/calendar/toggle', [AdminBookingController::class, 'toggle']);
         Route::get('/settings', [AdminSettingsController::class, 'index']);
         Route::patch('/settings/reviews', [AdminSettingsController::class, 'updateReviews']);
 
@@ -96,6 +104,12 @@ Route::prefix('v1')->group(function () {
             Route::post('/users', [AdminUserController::class, 'store']);
             Route::patch('/users/{id}', [AdminUserController::class, 'update']);
             Route::delete('/users/{id}', [AdminUserController::class, 'destroy']);
+
+            Route::get('/roles', [AdminRoleController::class, 'index']);
+            Route::get('/roles/permissions', [AdminRoleController::class, 'permissions']);
+            Route::post('/roles', [AdminRoleController::class, 'store']);
+            Route::patch('/roles/{id}', [AdminRoleController::class, 'update']);
+            Route::delete('/roles/{id}', [AdminRoleController::class, 'destroy']);
 
             Route::get('/tasks', [AdminTaskController::class, 'index']);
             Route::get('/tasks/mine', [AdminTaskController::class, 'myTasks']);

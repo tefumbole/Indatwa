@@ -5,7 +5,9 @@ import { Footer } from '@/components/layout/Footer'
 import { AuthProvider } from '@/context/AuthContext'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { AdminAnnouncements } from '@/pages/admin/AdminAnnouncements'
+import { AdminBookingCalendar } from '@/pages/admin/AdminBookingCalendar'
 import { AdminDashboard } from '@/pages/admin/AdminDashboard'
+import { AdminRoles } from '@/pages/admin/AdminRoles'
 import { AdminRequestDetail } from '@/pages/admin/AdminRequestDetail'
 import { AdminRequests } from '@/pages/admin/AdminRequests'
 import { AdminTasks } from '@/pages/admin/AdminTasks'
@@ -68,7 +70,9 @@ function App() {
                 <Route index element={<AdminDashboard />} />
                 <Route path="requests" element={<AdminRequests />} />
                 <Route path="requests/:id" element={<AdminRequestDetail />} />
+                <Route path="bookings" element={<AdminBookingCalendar />} />
                 <Route path="users" element={<AdminUsers />} />
+                <Route path="roles" element={<AdminRoles />} />
                 <Route path="tasks" element={<AdminTasks />} />
                 <Route path="announcements" element={<AdminAnnouncements />} />
               </Route>

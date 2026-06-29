@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/Button'
 import { motion } from 'framer-motion'
-import { ArrowRight, Play } from 'lucide-react'
+import { ArrowRight, LogIn } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export function HeroSection() {
@@ -74,7 +74,16 @@ export function HeroSection() {
               </Link>
               <Link to="/services">
                 <Button variant="outline" size="lg" className="gap-2">
-                  <Play size={16} /> Explore Services
+                  Explore Services
+                </Button>
+              </Link>
+              <Link to="/login">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="gap-2 border-2 border-ips-gold text-ips-gold hover:bg-ips-gold hover:text-ips-blue dark:border-ips-gold dark:text-ips-gold"
+                >
+                  <LogIn size={18} /> Admin Login
                 </Button>
               </Link>
             </motion.div>
