@@ -111,6 +111,13 @@ class AuthController extends Controller
 
     public function requestOtp(Request $request): JsonResponse
     {
+        if (! config('ips.otp_login_enabled')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'OTP login is temporarily disabled. Please use your password.',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'phone' => 'required|string|max:20',
             'context' => 'nullable|in:login,register',
@@ -126,6 +133,13 @@ class AuthController extends Controller
 
     public function verifyOtp(Request $request): JsonResponse
     {
+        if (! config('ips.otp_login_enabled')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'OTP login is temporarily disabled. Please use your password.',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'phone' => 'required|string|max:20',
             'otp' => 'required|string|size:6',
