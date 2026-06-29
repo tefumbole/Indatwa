@@ -2,11 +2,11 @@ import { AdminTabBar } from '@/components/admin/AdminTabBar'
 import { Button } from '@/components/ui/Button'
 import { Seo } from '@/components/shared/Seo'
 import { useAuth } from '@/context/AuthContext'
-import { api, type AdminDashboardData } from '@/lib/api'
+import { api, type AdminDashboardData, type WhatsAppLogData } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import {
-  Activity, CheckCircle, ClipboardList, Loader2, Settings, Shield, Users, Wrench,
+  Activity, CheckCircle, ClipboardList, Loader2, MessageCircle, Settings, Users, Wrench,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -24,12 +24,18 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [reviewsEnabled, setReviewsEnabled] = useState(true)
   const [savingReviews, setSavingReviews] = useState(false)
+  const [whatsapp, setWhatsapp] = useState<WhatsAppLogData | null>(null)
+  const [testingWa, setTestingWa] = useState(false)
+  const [waMessage, setWaMessage] = useState('')
 
   useEffect(() => {
     if (!token) return
     api.getAdminDashboard(token).then((d) => {
       if (d) setData(d)
       setLoading(false)
+    })
+    api.getWhatsAppLogs(token).then((w) => {
+      if (w) setWhatsapp(w)
     })
   }, [token])
 
@@ -40,6 +46,16 @@ export function AdminDashboard() {
     const res = await api.updateReviewsEnabled(token, next)
     if (res.success) setReviewsEnabled(next)
     setSavingReviews(false)
+  }
+
+  const testWhatsApp = async () => {
+    if (!token) return
+    setTestingWa(true)
+    setWaMessage('')
+    const res = await api.testWhatsApp(token)
+    setWaMessage(res.message || (res.success ? 'Test message sent!' : 'Send failed'))
+    setTestingWa(false)
+    api.getWhatsAppLogs(token).then((w) => { if (w) setWhatsapp(w) })
   }
 
   if (loading) {
@@ -130,13 +146,45 @@ export function AdminDashboard() {
               </div>
               <div className="space-y-3 text-sm">
                 <StatusRow label="Database Connection" status="Active" variant="green" />
-                <StatusRow label="WhatsApp Service" status="Configured" variant="green" />
+                <StatusRow
+                  label="WhatsApp (WasenderAPI)"
+                  status={whatsapp?.stats.configured ? 'Configured' : 'Not configured'}
+                  variant={whatsapp?.stats.configured ? 'green' : 'blue'}
+                />
+                {whatsapp && (
+                  <StatusRow
+                    label="Messages sent"
+                    status={`${whatsapp.stats.sent} sent / ${whatsapp.stats.failed} failed`}
+                    variant="blue"
+                  />
+                )}
                 <StatusRow label="Security" status="Enabled" variant="blue" />
               </div>
-              <Button className="w-full mt-5" size="sm">
-                <Shield size={14} className="mr-2" /> Go to Profile Settings
+              <Button className="w-full mt-5 gap-2" size="sm" onClick={testWhatsApp} disabled={testingWa}>
+                {testingWa ? <Loader2 size={14} className="animate-spin" /> : <MessageCircle size={14} />}
+                Test WhatsApp
               </Button>
+              {waMessage && <p className="text-xs text-slate-500 mt-2 text-center">{waMessage}</p>}
             </div>
+
+            {whatsapp && whatsapp.logs.length > 0 && (
+              <div className="admin-card p-6">
+                <h2 className="font-bold text-ips-blue mb-3">Recent WhatsApp</h2>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {whatsapp.logs.slice(0, 8).map((log) => (
+                    <div key={log.id} className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 truncate max-w-[140px]">{log.message_type}</span>
+                      <span className={cn(
+                        'font-bold px-2 py-0.5 rounded-full',
+                        log.status === 'sent' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                      )}>
+                        {log.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="admin-card p-6">
               <h2 className="font-bold text-ips-blue mb-3">Public Reviews</h2>

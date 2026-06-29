@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ServiceRequest;
 use App\Models\ServiceRequestItem;
 use App\Models\User;
+use App\Services\Notifications\RequestNotificationService;
 use App\Services\RequestPdfService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,10 +16,12 @@ use Illuminate\Support\Facades\Storage;
 class AdminRequestController extends Controller
 {
     private $pdfService;
+    private $notifications;
 
-    public function __construct(RequestPdfService $pdfService)
+    public function __construct(RequestPdfService $pdfService, RequestNotificationService $notifications)
     {
         $this->pdfService = $pdfService;
+        $this->notifications = $notifications;
     }
 
     public function index(Request $request): JsonResponse
@@ -142,6 +145,12 @@ class AdminRequestController extends Controller
             'created_at' => now(),
         ]);
 
+        try {
+            $this->notifications->sendStatusUpdate($serviceRequest->fresh(), $validated['note'] ?? null);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Status WhatsApp failed: '.$e->getMessage());
+        }
+
         return response()->json([
             'success' => true,
             'data' => ['status' => $serviceRequest->status],
@@ -192,10 +201,18 @@ class AdminRequestController extends Controller
         $serviceRequest->update(['assigned_to' => $validated['assigned_to'] ?? null]);
 
         $assignee = $serviceRequest->assigned_to
-            ? User::select('id', 'name')->find($serviceRequest->assigned_to)
+            ? User::select('id', 'name', 'phone')->find($serviceRequest->assigned_to)
             : null;
 
-        return response()->json(['success' => true, 'data' => ['assigned_to' => $assignee]]);
+        if ($assignee) {
+            try {
+                $this->notifications->notifyAssignee($serviceRequest->fresh(), $assignee);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Assign WhatsApp failed: '.$e->getMessage());
+            }
+        }
+
+        return response()->json(['success' => true, 'data' => ['assigned_to' => $assignee ? ['id' => $assignee->id, 'name' => $assignee->name] : null]]);
     }
 
     public function addMessage(Request $request, int $id): JsonResponse
@@ -289,6 +306,18 @@ class AdminRequestController extends Controller
                 'created_at' => now(),
             ]
         );
+
+        if (! empty($validated['send_to_client'])) {
+            try {
+                $this->notifications->sendQuotation(
+                    $serviceRequest->fresh(),
+                    (float) $validated['quoted_amount'],
+                    $validated['quotation_notes'] ?? null
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Quotation WhatsApp failed: '.$e->getMessage());
+            }
+        }
 
         return response()->json([
             'success' => true,

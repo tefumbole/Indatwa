@@ -11,11 +11,14 @@ class StaffTask extends Model
         'title', 'description', 'status', 'priority',
         'assigned_to', 'service_request_id', 'created_by',
         'due_date', 'completed_at',
+        'assignment_notified_at', 'last_reminder_at', 'last_reminder_type',
     ];
 
     protected $casts = [
         'due_date' => 'date',
         'completed_at' => 'datetime',
+        'assignment_notified_at' => 'datetime',
+        'last_reminder_at' => 'datetime',
     ];
 
     public function assignee(): BelongsTo

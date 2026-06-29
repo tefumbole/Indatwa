@@ -12,6 +12,7 @@ use App\Services\Wasender\WasenderWhatsAppService;
 use App\Services\WhatsApp\MessageTemplates;
 use App\Services\WhatsApp\WhatsAppService;
 use App\Support\PhoneFormatter;
+use App\Support\WasenderRateLimiter;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -49,6 +50,100 @@ class RequestNotificationService
         $this->notifyAdminsDashboard($request, $trackingUrl, $reviewUrl);
     }
 
+    public function sendStatusUpdate(ServiceRequest $request, ?string $note = null): void
+    {
+        if (! $this->wasender->isConfigured()) {
+            return;
+        }
+
+        $request->load(['items']);
+        $trackingUrl = config('app.frontend_url').'/track/'.$request->tracking_token;
+        $phone = PhoneFormatter::toE164($request->client_phone);
+
+        if (! $phone) {
+            return;
+        }
+
+        $text = MessageTemplates::statusUpdate($request, $trackingUrl);
+        if ($note) {
+            $text .= "\n\nNote: {$note}";
+        }
+
+        $this->whatsapp->sendNotification($phone, $text, 'status_update', ServiceRequest::class, $request->id);
+
+        if (in_array($request->status, ['approved', 'rejected', 'quotation_prepared', 'awaiting_payment'], true)) {
+            $pdfUrl = $this->resolvePdfUrl($request);
+            if ($pdfUrl) {
+                WasenderRateLimiter::beforeAttachment();
+                $this->whatsapp->sendDocument(
+                    $phone,
+                    $pdfUrl,
+                    'status_pdf',
+                    'Updated request PDF — '.$request->reference_number,
+                    $request->reference_number.'.pdf',
+                    ServiceRequest::class,
+                    $request->id,
+                );
+            }
+        }
+    }
+
+    public function sendQuotation(ServiceRequest $request, float $amount, ?string $notes = null): void
+    {
+        if (! $this->wasender->isConfigured()) {
+            return;
+        }
+
+        $request->load(['items']);
+        $trackingUrl = config('app.frontend_url').'/track/'.$request->tracking_token;
+        $phone = PhoneFormatter::toE164($request->client_phone);
+
+        if (! $phone) {
+            return;
+        }
+
+        $text = MessageTemplates::quotationPrepared($request, $trackingUrl, $amount, $notes);
+        $this->whatsapp->sendNotification($phone, $text, 'quotation_prepared', ServiceRequest::class, $request->id);
+
+        $pdfUrl = $this->resolvePdfUrl($request);
+        if ($pdfUrl) {
+            WasenderRateLimiter::beforeAttachment();
+            $this->whatsapp->sendDocument(
+                $phone,
+                $pdfUrl,
+                'quotation_pdf',
+                'Quotation PDF — '.$request->reference_number,
+                $request->reference_number.'.pdf',
+                ServiceRequest::class,
+                $request->id,
+            );
+        }
+    }
+
+    public function notifyAssignee(ServiceRequest $request, User $assignee): void
+    {
+        if (! $this->wasender->isConfigured() || ! $assignee->phone) {
+            return;
+        }
+
+        $phone = PhoneFormatter::toE164($assignee->phone);
+        if (! $phone) {
+            return;
+        }
+
+        $reviewUrl = config('app.frontend_url').'/admin/requests/'.$request->id;
+        $text = MessageTemplates::requestAssignedStaff($request, $reviewUrl, $assignee->name);
+
+        $this->whatsapp->sendNotification(
+            $phone,
+            $text,
+            'request_assigned',
+            ServiceRequest::class,
+            $request->id,
+            $assignee->id
+        );
+    }
+
     private function notifyClient(ServiceRequest $request, string $trackingUrl, ?string $pdfUrl): void
     {
         if (! $this->wasender->isConfigured()) {
@@ -68,7 +163,7 @@ class RequestNotificationService
         $this->whatsapp->sendNotification($phone, $text, 'request_received', ServiceRequest::class, $request->id);
 
         if ($pdfUrl) {
-            sleep(config('wasender.rate_limits.text_to_attachment'));
+            WasenderRateLimiter::beforeAttachment();
             $this->whatsapp->sendDocument(
                 $phone,
                 $pdfUrl,
@@ -92,13 +187,13 @@ class RequestNotificationService
 
         foreach ($phones as $index => $phone) {
             if ($index > 0) {
-                sleep(config('wasender.rate_limits.between_recipients'));
+                WasenderRateLimiter::betweenRecipients();
             }
 
             $this->whatsapp->sendNotification($phone, $text, 'admin_new_request', ServiceRequest::class, $request->id);
 
             if ($pdfUrl) {
-                sleep(config('wasender.rate_limits.text_to_attachment'));
+                WasenderRateLimiter::beforeAttachment();
                 $this->whatsapp->sendDocument(
                     $phone,
                     $pdfUrl,

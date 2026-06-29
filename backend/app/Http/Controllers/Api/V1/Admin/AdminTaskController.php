@@ -5,12 +5,21 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\StaffTask;
 use App\Models\User;
+use App\Services\Notifications\TaskNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class AdminTaskController extends Controller
 {
+    private TaskNotificationService $notifications;
+
+    public function __construct(TaskNotificationService $notifications)
+    {
+        $this->notifications = $notifications;
+    }
+
     public function index(Request $request): JsonResponse
     {
         $query = StaffTask::with([
@@ -54,19 +63,31 @@ class AdminTaskController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
+        $task->load([
+            'assignee:id,name,email,phone',
+            'creator:id,name',
+            'serviceRequest:id,reference_number,client_name,event_title',
+        ]);
+
+        if ($task->assigned_to) {
+            try {
+                $this->notifications->notifyAssigned($task);
+            } catch (\Throwable $e) {
+                Log::error('Task assign WhatsApp failed: '.$e->getMessage());
+            }
+        }
+
         return response()->json([
             'success' => true,
-            'data' => $this->formatTask($task->load([
-                'assignee:id,name,email',
-                'creator:id,name',
-                'serviceRequest:id,reference_number,client_name,event_title',
-            ])),
+            'data' => $this->formatTask($task),
         ], 201);
     }
 
     public function update(Request $request, int $id): JsonResponse
     {
         $task = StaffTask::findOrFail($id);
+        $previousStatus = $task->status;
+        $previousAssignee = $task->assigned_to;
 
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
@@ -83,14 +104,25 @@ class AdminTaskController extends Controller
         }
 
         $task->update($validated);
+        $task->refresh()->load([
+            'assignee:id,name,email,phone',
+            'creator:id,name',
+            'serviceRequest:id,reference_number,client_name,event_title',
+        ]);
+
+        try {
+            if (isset($validated['assigned_to']) && $validated['assigned_to'] != $previousAssignee) {
+                $this->notifications->notifyAssigned($task);
+            } elseif (isset($validated['status']) && $validated['status'] !== $previousStatus) {
+                $this->notifications->notifyStatusChange($task, $previousStatus);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Task update WhatsApp failed: '.$e->getMessage());
+        }
 
         return response()->json([
             'success' => true,
-            'data' => $this->formatTask($task->fresh()->load([
-                'assignee:id,name,email',
-                'creator:id,name',
-                'serviceRequest:id,reference_number,client_name,event_title',
-            ])),
+            'data' => $this->formatTask($task),
         ]);
     }
 
@@ -126,6 +158,8 @@ class AdminTaskController extends Controller
             'priority' => $task->priority,
             'due_date' => $task->due_date?->format('Y-m-d'),
             'completed_at' => $task->completed_at?->toIso8601String(),
+            'assignment_notified_at' => $task->assignment_notified_at?->toIso8601String(),
+            'last_reminder_at' => $task->last_reminder_at?->toIso8601String(),
             'created_at' => $task->created_at?->toIso8601String(),
             'assigned_to' => $task->assignee ? [
                 'id' => $task->assignee->id,

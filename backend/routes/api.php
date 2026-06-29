@@ -4,11 +4,12 @@ use App\Http\Controllers\Api\V1\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\AdminRequestController;
 use App\Http\Controllers\Api\V1\Admin\AdminSettingsController;
 use App\Http\Controllers\Api\V1\Admin\AdminTaskController;
-use App\Http\Controllers\Api\V1\Admin\AdminUserController;
+use App\Http\Controllers\Api\V1\Admin\AdminWhatsAppController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Portal\PortalController;
 use App\Http\Controllers\Api\V1\Open\BlogController;
 use App\Http\Controllers\Api\V1\Open\ContactController;
+use App\Http\Controllers\Api\V1\Open\CronController;
 use App\Http\Controllers\Api\V1\Open\ReviewController;
 use App\Http\Controllers\Api\V1\Open\ServiceController;
 use App\Http\Controllers\Api\V1\Open\ServiceRequestController;
@@ -35,6 +36,8 @@ Route::prefix('v1')->group(function () {
     Route::get('/blog/{slug}', [BlogController::class, 'show']);
     Route::post('/contact', [ContactController::class, 'store']);
     Route::post('/webhooks/wasender', [WasenderWebhookController::class, 'handle']);
+    Route::get('/cron/task-reminders', [CronController::class, 'taskReminders']);
+    Route::get('/cron/run', [CronController::class, 'runSchedule']);
 
     // Auth
     Route::prefix('auth')->group(function () {
@@ -96,6 +99,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/tasks', [AdminTaskController::class, 'store']);
             Route::patch('/tasks/{id}', [AdminTaskController::class, 'update']);
             Route::delete('/tasks/{id}', [AdminTaskController::class, 'destroy']);
+
+            Route::get('/whatsapp/logs', [AdminWhatsAppController::class, 'index']);
         });
     });
 });

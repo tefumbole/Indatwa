@@ -139,6 +139,12 @@ export function AdminTasks() {
                   <div className="flex flex-wrap gap-3 text-xs text-slate-500">
                     {task.assigned_to && <span>Assigned: <strong className="text-ips-blue">{task.assigned_to.name}</strong></span>}
                     {task.due_date && <span>Due: {task.due_date}</span>}
+                    {task.assignment_notified_at && (
+                      <span className="text-green-600">WhatsApp sent</span>
+                    )}
+                    {task.last_reminder_at && (
+                      <span className="text-yellow-600">Reminded</span>
+                    )}
                     {task.service_request && (
                       <Link to={`/admin/requests/${task.service_request.id}`} className="text-ips-blue hover:underline">
                         {task.service_request.reference_number}

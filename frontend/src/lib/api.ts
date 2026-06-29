@@ -299,10 +299,25 @@ export interface StaffTask {
   priority: string
   due_date: string | null
   completed_at: string | null
+  assignment_notified_at?: string | null
+  last_reminder_at?: string | null
   created_at: string | null
   assigned_to: { id: number; name: string; email?: string | null } | null
   created_by: { id: number; name: string } | null
   service_request: { id: number; reference_number: string; client_name: string; event_title: string } | null
+}
+
+export interface WhatsAppLogEntry {
+  id: number
+  phone: string
+  message_type: string
+  status: string
+  created_at: string
+}
+
+export interface WhatsAppLogData {
+  stats: { total: number; sent: number; failed: number; configured: boolean }
+  logs: WhatsAppLogEntry[]
 }
 
 export interface TrackRequestResult {
@@ -525,6 +540,11 @@ export const api = {
   }>) => patchApi(`/admin/tasks/${id}`, data, token),
 
   deleteAdminTask: (token: string, id: number) => deleteApi(`/admin/tasks/${id}`, token),
+
+  getWhatsAppLogs: (token: string) => authFetch<WhatsAppLogData>('/admin/whatsapp/logs', token),
+
+  testWhatsApp: (token: string, phone?: string) =>
+    postAuthApi<{ success: boolean; message?: string }>('/whatsapp/test', phone ? { phone } : {}, token),
 
   downloadAdminPdf: async (token: string, id: number, filename: string) => {
     try {

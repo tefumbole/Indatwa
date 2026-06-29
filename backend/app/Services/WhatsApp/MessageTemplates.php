@@ -104,4 +104,112 @@ class MessageTemplates
             config('wasender.company_name'),
         ]);
     }
+
+    public static function quotationPrepared(ServiceRequest $request, string $trackingUrl, float $amount, ?string $notes = null): string
+    {
+        $formatted = number_format($amount, 0).' RWF';
+
+        return implode("\n", array_filter([
+            "Hello {$request->client_name},",
+            '',
+            "Your quotation for request *{$request->reference_number}* is ready.",
+            '',
+            "Amount: *{$formatted}*",
+            "Event: {$request->event_title}",
+            $notes ? "Notes: {$notes}" : null,
+            '',
+            "Review and accept: {$trackingUrl}",
+            '',
+            config('wasender.company_name'),
+        ], fn ($line) => $line !== null));
+    }
+
+    public static function requestAssignedStaff(ServiceRequest $request, string $reviewUrl, string $assigneeName): string
+    {
+        return implode("\n", array_filter([
+            "*Request Assigned to You*",
+            '',
+            "Hello {$assigneeName},",
+            '',
+            "Ref: *{$request->reference_number}*",
+            "Client: {$request->client_name} ({$request->client_phone})",
+            "Event: {$request->event_title}",
+            "Date: {$request->event_date->format('d M Y')}",
+            $request->venue ? "Venue: {$request->venue}" : null,
+            '',
+            "Login: ".config('app.frontend_url').'/login',
+            "Review: {$reviewUrl}",
+            '',
+            config('wasender.company_name'),
+        ], fn ($line) => $line !== null));
+    }
+
+    public static function taskAssigned(\App\Models\StaffTask $task, string $assigneeName, ?string $creatorName = null): string
+    {
+        $loginUrl = config('app.frontend_url').'/login';
+        $tasksUrl = config('app.frontend_url').'/admin/tasks';
+
+        return implode("\n", array_filter([
+            '*New Task Assigned*',
+            '',
+            "Hello {$assigneeName},",
+            '',
+            "Task: *{$task->title}*",
+            $task->description ? "Details: {$task->description}" : null,
+            "Priority: ".strtoupper($task->priority),
+            $task->due_date ? "Due: {$task->due_date->format('d M Y')}" : null,
+            $creatorName ? "Assigned by: {$creatorName}" : null,
+            $task->serviceRequest ? "Request: {$task->serviceRequest->reference_number}" : null,
+            '',
+            "Login: {$loginUrl}",
+            "View tasks: {$tasksUrl}",
+            '',
+            config('wasender.company_name'),
+        ], fn ($line) => $line !== null));
+    }
+
+    public static function taskReminder(\App\Models\StaffTask $task, string $assigneeName, string $reminderType): string
+    {
+        $urgency = match ($reminderType) {
+            'overdue' => '⚠️ *OVERDUE*',
+            'due_today' => '📅 *Due Today*',
+            'due_tomorrow' => '⏰ *Due Tomorrow*',
+            default => '🔔 *Task Reminder*',
+        };
+
+        $tasksUrl = config('app.frontend_url').'/admin/tasks';
+
+        return implode("\n", array_filter([
+            "{$urgency}",
+            '',
+            "Hello {$assigneeName},",
+            '',
+            "Task: *{$task->title}*",
+            "Status: ".str_replace('_', ' ', $task->status),
+            $task->due_date ? "Due: {$task->due_date->format('d M Y')}" : 'No due date set',
+            $task->serviceRequest ? "Linked request: {$task->serviceRequest->reference_number}" : null,
+            '',
+            "View tasks: {$tasksUrl}",
+            '',
+            config('wasender.company_name'),
+        ], fn ($line) => $line !== null));
+    }
+
+    public static function taskStatusUpdate(\App\Models\StaffTask $task, string $assigneeName): string
+    {
+        $status = strtoupper(str_replace('_', ' ', $task->status));
+
+        return implode("\n", [
+            '*Task Status Updated*',
+            '',
+            "Hello {$assigneeName},",
+            '',
+            "Task: *{$task->title}*",
+            "New status: *{$status}*",
+            '',
+            "View: ".config('app.frontend_url').'/admin/tasks',
+            '',
+            config('wasender.company_name'),
+        ]);
+    }
 }
