@@ -16,7 +16,7 @@ class SiteController extends Controller
             'company_name' => 'Indatwa Protocol & Services Agency',
             'location' => 'Kimironko, Kigali, Rwanda',
             'whatsapp' => '+250780759253',
-            'email' => 'info@indatwa.rw',
+            'email' => 'info@indatwagency.com',
             'primary_color' => '#0B3D91',
             'secondary_color' => '#D4AF37',
             'developed_by' => 'Alpha Bridge Technologies',

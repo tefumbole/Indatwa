@@ -68,14 +68,19 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'phone' => 'required_without:email|string|max:20',
-            'email' => 'required_without:phone|email',
+            'username' => 'required_without_all:email,phone|string|max:50',
+            'phone' => 'required_without_all:email,username|nullable|string|max:20',
+            'email' => 'required_without_all:phone,username|nullable|email',
             'password' => 'required|string',
         ]);
 
-        $user = isset($validated['email'])
-            ? User::where('email', $validated['email'])->first()
-            : User::where('phone', PhoneFormatter::toE164($validated['phone']))->first();
+        if (! empty($validated['username'])) {
+            $user = User::where('username', $validated['username'])->first();
+        } elseif (! empty($validated['email'])) {
+            $user = User::where('email', $validated['email'])->first();
+        } else {
+            $user = User::where('phone', PhoneFormatter::toE164($validated['phone']))->first();
+        }
 
         if (! $user || ! $user->password || ! Hash::check($validated['password'], $user->password)) {
             return response()->json(['success' => false, 'message' => 'Invalid credentials'], 401);

@@ -138,9 +138,8 @@ class AdminRequestController extends Controller
             'from_status' => $fromStatus,
             'to_status' => $validated['status'],
             'changed_by' => $request->user()->id,
-            'note' => $validated['note'] ?? null,
+            'comment' => $validated['note'] ?? null,
             'created_at' => now(),
-            'updated_at' => now(),
         ]);
 
         return response()->json([
@@ -245,6 +244,60 @@ class AdminRequestController extends Controller
             Storage::disk('public')->path($serviceRequest->pdf_path),
             "{$serviceRequest->reference_number}.pdf"
         );
+    }
+
+    public function setQuotation(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'quoted_amount' => 'required|numeric|min:0',
+            'quotation_notes' => 'nullable|string|max:5000',
+            'send_to_client' => 'nullable|boolean',
+        ]);
+
+        $serviceRequest = ServiceRequest::findOrFail($id);
+        $fromStatus = $serviceRequest->status;
+
+        $serviceRequest->update([
+            'quoted_amount' => $validated['quoted_amount'],
+            'quotation_notes' => $validated['quotation_notes'] ?? null,
+            'quotation_sent_at' => ! empty($validated['send_to_client']) ? now() : $serviceRequest->quotation_sent_at,
+            'status' => 'quotation_prepared',
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+        ]);
+
+        DB::table('service_request_status_history')->insert([
+            'service_request_id' => $serviceRequest->id,
+            'from_status' => $fromStatus,
+            'to_status' => 'quotation_prepared',
+            'changed_by' => $request->user()->id,
+            'comment' => $validated['quotation_notes'] ?? 'Quotation prepared',
+            'created_at' => now(),
+        ]);
+
+        $invoiceNumber = 'INV-'.$serviceRequest->reference_number;
+        DB::table('invoices')->updateOrInsert(
+            ['service_request_id' => $serviceRequest->id],
+            [
+                'invoice_number' => $invoiceNumber,
+                'total_amount' => $validated['quoted_amount'],
+                'amount_paid' => 0,
+                'currency' => 'RWF',
+                'status' => 'sent',
+                'sent_at' => now(),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'quoted_amount' => $serviceRequest->quoted_amount,
+                'status' => $serviceRequest->status,
+                'invoice_number' => $invoiceNumber,
+            ],
+        ]);
     }
 
     private function summary(ServiceRequest $r): array

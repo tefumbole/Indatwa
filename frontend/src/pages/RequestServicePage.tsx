@@ -1,5 +1,3 @@
-import { DocumentUpload } from '@/components/request/DocumentUpload'
-import { SignaturePad } from '@/components/request/SignaturePad'
 import { Seo } from '@/components/shared/Seo'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/Button'
@@ -7,7 +5,7 @@ import { FALLBACK_SERVICES } from '@/data/fallbacks'
 import { api, type Service } from '@/lib/api'
 import {
   clientStepSchema, eventStepSchema, EVENT_TYPES,
-  servicesStepSchema, signatureStepSchema, STEP_LABELS,
+  servicesStepSchema, STEP_LABELS, FORM_PLACEHOLDERS,
   type RequestFormData,
 } from '@/schemas/requestSchema'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -17,6 +15,8 @@ import { Link, useNavigate } from 'react-router-dom'
 
 const inputClass = 'w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-ips-blue/30 focus:border-ips-blue outline-none transition text-sm'
 const labelClass = 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5'
+
+const TOTAL_STEPS = STEP_LABELS.length
 
 const initialForm: RequestFormData = {
   services: [],
@@ -28,13 +28,13 @@ const initialForm: RequestFormData = {
   client_city: '',
   event_title: '',
   event_type: '',
-  event_date: '',
   event_start_date: '',
+  event_start_time: '',
   event_end_date: '',
+  event_end_time: '',
   number_of_guests: undefined,
   venue: '',
   event_description: '',
-  signature: '',
   documents: [],
 }
 
@@ -82,11 +82,6 @@ export function RequestServicePage() {
       case 3:
         result = eventStepSchema.safeParse(form)
         break
-      case 4:
-        return true
-      case 5:
-        result = signatureStepSchema.safeParse({ signature: form.signature })
-        break
       default:
         return true
     }
@@ -102,14 +97,33 @@ export function RequestServicePage() {
     return true
   }
 
+  const validateAll = (): boolean => {
+    const checks = [
+      servicesStepSchema.safeParse({ services: form.services }),
+      clientStepSchema.safeParse(form),
+      eventStepSchema.safeParse(form),
+    ]
+    for (const check of checks) {
+      if (!check.success) {
+        const fieldErrors: Record<string, string> = {}
+        check.error.issues.forEach((issue) => {
+          fieldErrors[issue.path[0] as string] = issue.message
+        })
+        setErrors(fieldErrors)
+        return false
+      }
+    }
+    return true
+  }
+
   const next = () => {
-    if (validateStep()) setStep((s) => Math.min(s + 1, 6))
+    if (validateStep()) setStep((s) => Math.min(s + 1, TOTAL_STEPS))
   }
 
   const back = () => setStep((s) => Math.max(s - 1, 1))
 
   const submit = async () => {
-    if (!validateStep()) return
+    if (!validateAll()) return
     setSubmitting(true)
     const result = await api.submitRequest(form, token ?? undefined)
     setSubmitting(false)
@@ -130,11 +144,17 @@ export function RequestServicePage() {
 
   const selectedServices = services.filter((s) => form.services.includes(s.id))
 
+  const formatEventSchedule = () => {
+    const start = [form.event_start_date, form.event_start_time].filter(Boolean).join(' ')
+    const end = [form.event_end_date || form.event_start_date, form.event_end_time].filter(Boolean).join(' ')
+    return end && end !== start ? `${start} → ${end}` : start
+  }
+
   return (
     <>
       <Seo
         title="Request Service"
-        description="Submit a service request to Indatwa Protocol & Services Agency. Select services, provide event details, and receive a tracking reference."
+        description="Submit an event inquiry to Indatwa Protocol & Services Agency. Our team will review your request and send a quotation."
         path="/request"
       />
       <div className="min-h-screen pt-28 pb-16 px-4">
@@ -147,8 +167,11 @@ export function RequestServicePage() {
             <h1 className="font-display text-3xl font-bold text-ips-blue dark:text-white mb-2">
               Request Service
             </h1>
-            <p className="text-slate-600 dark:text-slate-400 mb-8">
-              Step {step} of 6 — {STEP_LABELS[step - 1]}
+            <p className="text-slate-600 dark:text-slate-400 mb-2">
+              Step {step} of {TOTAL_STEPS} — {STEP_LABELS[step - 1]}
+            </p>
+            <p className="text-xs text-slate-500 mb-8">
+              Submit your inquiry first. After admin review and quotation, you will sign and attach ID when you accept.
             </p>
 
             <div className="flex gap-1.5 mb-10">
@@ -212,34 +235,34 @@ export function RequestServicePage() {
                     <h2 className="font-semibold text-lg text-ips-blue dark:text-white mb-6">Personal Information</h2>
                     <div className="space-y-4">
                       <div>
-                        <label className={labelClass}>Full Name *</label>
-                        <input className={inputClass} value={form.client_name} onChange={(e) => update({ client_name: e.target.value })} placeholder="Jean Baptiste N." />
+                        <label className={labelClass}>Full Name / Organization *</label>
+                        <input className={inputClass} value={form.client_name} onChange={(e) => update({ client_name: e.target.value })} placeholder={FORM_PLACEHOLDERS.client_name} />
                         {errors.client_name && <p className="text-red-500 text-xs mt-1">{errors.client_name}</p>}
                       </div>
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div>
                           <label className={labelClass}>Phone Number *</label>
-                          <input className={inputClass} value={form.client_phone} onChange={(e) => update({ client_phone: e.target.value })} placeholder="+250 780 000 000" />
+                          <input className={inputClass} value={form.client_phone} onChange={(e) => update({ client_phone: e.target.value })} placeholder={FORM_PLACEHOLDERS.client_phone} />
                           {errors.client_phone && <p className="text-red-500 text-xs mt-1">{errors.client_phone}</p>}
                         </div>
                         <div>
                           <label className={labelClass}>Email Address</label>
-                          <input className={inputClass} type="email" value={form.client_email} onChange={(e) => update({ client_email: e.target.value })} placeholder="you@example.com" />
+                          <input className={inputClass} type="email" value={form.client_email} onChange={(e) => update({ client_email: e.target.value })} placeholder={FORM_PLACEHOLDERS.client_email} />
                           {errors.client_email && <p className="text-red-500 text-xs mt-1">{errors.client_email}</p>}
                         </div>
                       </div>
                       <div className="grid sm:grid-cols-3 gap-4">
                         <div>
                           <label className={labelClass}>Nationality</label>
-                          <input className={inputClass} value={form.client_nationality} onChange={(e) => update({ client_nationality: e.target.value })} placeholder="Rwandan" />
+                          <input className={inputClass} value={form.client_nationality} onChange={(e) => update({ client_nationality: e.target.value })} placeholder={FORM_PLACEHOLDERS.client_nationality} />
                         </div>
                         <div>
                           <label className={labelClass}>Country</label>
-                          <input className={inputClass} value={form.client_country} onChange={(e) => update({ client_country: e.target.value })} placeholder="Rwanda" />
+                          <input className={inputClass} value={form.client_country} onChange={(e) => update({ client_country: e.target.value })} placeholder={FORM_PLACEHOLDERS.client_country} />
                         </div>
                         <div>
                           <label className={labelClass}>City</label>
-                          <input className={inputClass} value={form.client_city} onChange={(e) => update({ client_city: e.target.value })} placeholder="Kigali" />
+                          <input className={inputClass} value={form.client_city} onChange={(e) => update({ client_city: e.target.value })} placeholder={FORM_PLACEHOLDERS.client_city} />
                         </div>
                       </div>
                     </div>
@@ -252,72 +275,57 @@ export function RequestServicePage() {
                     <div className="space-y-4">
                       <div>
                         <label className={labelClass}>Event Title *</label>
-                        <input className={inputClass} value={form.event_title} onChange={(e) => update({ event_title: e.target.value })} placeholder="Embassy Reception 2026" />
+                        <input className={inputClass} value={form.event_title} onChange={(e) => update({ event_title: e.target.value })} placeholder={FORM_PLACEHOLDERS.event_title} />
                         {errors.event_title && <p className="text-red-500 text-xs mt-1">{errors.event_title}</p>}
                       </div>
-                      <div className="grid sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className={labelClass}>Event Type *</label>
-                          <select className={inputClass} value={form.event_type} onChange={(e) => update({ event_type: e.target.value })}>
-                            <option value="">Select type</option>
-                            {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                          </select>
-                          {errors.event_type && <p className="text-red-500 text-xs mt-1">{errors.event_type}</p>}
-                        </div>
-                        <div>
-                          <label className={labelClass}>Event Date *</label>
-                          <input className={inputClass} type="date" value={form.event_date} onChange={(e) => update({ event_date: e.target.value })} />
-                          {errors.event_date && <p className="text-red-500 text-xs mt-1">{errors.event_date}</p>}
-                        </div>
+                      <div>
+                        <label className={labelClass}>Event Type *</label>
+                        <select className={inputClass} value={form.event_type} onChange={(e) => update({ event_type: e.target.value })}>
+                          <option value="">Select type</option>
+                          {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        {errors.event_type && <p className="text-red-500 text-xs mt-1">{errors.event_type}</p>}
                       </div>
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div>
-                          <label className={labelClass}>Start Date</label>
+                          <label className={labelClass}>Start Date *</label>
                           <input className={inputClass} type="date" value={form.event_start_date} onChange={(e) => update({ event_start_date: e.target.value })} />
+                          {errors.event_start_date && <p className="text-red-500 text-xs mt-1">{errors.event_start_date}</p>}
                         </div>
+                        <div>
+                          <label className={labelClass}>Start Time</label>
+                          <input className={inputClass} type="time" value={form.event_start_time} onChange={(e) => update({ event_start_time: e.target.value })} />
+                        </div>
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-4">
                         <div>
                           <label className={labelClass}>End Date</label>
                           <input className={inputClass} type="date" value={form.event_end_date} onChange={(e) => update({ event_end_date: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>End Time</label>
+                          <input className={inputClass} type="time" value={form.event_end_time} onChange={(e) => update({ event_end_time: e.target.value })} />
                         </div>
                       </div>
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div>
                           <label className={labelClass}>Number of Guests</label>
-                          <input className={inputClass} type="number" min={1} value={form.number_of_guests ?? ''} onChange={(e) => update({ number_of_guests: e.target.value ? Number(e.target.value) : undefined })} placeholder="100" />
+                          <input className={inputClass} type="number" min={1} value={form.number_of_guests ?? ''} onChange={(e) => update({ number_of_guests: e.target.value ? Number(e.target.value) : undefined })} placeholder={FORM_PLACEHOLDERS.number_of_guests} />
                         </div>
                         <div>
                           <label className={labelClass}>Venue</label>
-                          <input className={inputClass} value={form.venue} onChange={(e) => update({ venue: e.target.value })} placeholder="Kigali Convention Centre" />
+                          <input className={inputClass} value={form.venue} onChange={(e) => update({ venue: e.target.value })} placeholder={FORM_PLACEHOLDERS.venue} />
                         </div>
                       </div>
                       <div>
                         <label className={labelClass}>Event Description</label>
-                        <textarea className={`${inputClass} resize-none`} rows={4} value={form.event_description} onChange={(e) => update({ event_description: e.target.value })} placeholder="Describe your event requirements..." />
+                        <textarea className={`${inputClass} resize-none`} rows={4} value={form.event_description} onChange={(e) => update({ event_description: e.target.value })} placeholder={FORM_PLACEHOLDERS.event_description} />
                       </div>
                     </div>
                   </>
                 )}
 
                 {step === 4 && (
-                  <>
-                    <h2 className="font-semibold text-lg text-ips-blue dark:text-white mb-2">Upload Documents</h2>
-                    <p className="text-sm text-slate-500 mb-6">Optional — passport, national ID, or other identification</p>
-                    <DocumentUpload documents={form.documents} onChange={(documents) => update({ documents })} />
-                  </>
-                )}
-
-                {step === 5 && (
-                  <>
-                    <h2 className="font-semibold text-lg text-ips-blue dark:text-white mb-6">Digital Signature</h2>
-                    <SignaturePad
-                      value={form.signature}
-                      onChange={(signature) => update({ signature })}
-                      error={errors.signature}
-                    />
-                  </>
-                )}
-
-                {step === 6 && (
                   <>
                     <h2 className="font-semibold text-lg text-ips-blue dark:text-white mb-6">Review & Submit</h2>
                     <div className="space-y-6 text-sm">
@@ -335,22 +343,14 @@ export function RequestServicePage() {
                       </ReviewBlock>
                       <ReviewBlock title="Event">
                         <p><strong>{form.event_title}</strong> — {form.event_type}</p>
-                        <p>Date: {form.event_date}{form.venue ? ` — ${form.venue}` : ''}</p>
+                        <p>Schedule: {formatEventSchedule()}</p>
+                        {form.venue && <p>Venue: {form.venue}</p>}
                         {form.number_of_guests && <p>Guests: {form.number_of_guests}</p>}
                         {form.event_description && <p className="text-slate-500 mt-1">{form.event_description}</p>}
                       </ReviewBlock>
-                      {form.documents.length > 0 && (
-                        <ReviewBlock title="Documents">
-                          <p>{form.documents.length} file(s) attached</p>
-                        </ReviewBlock>
-                      )}
-                      <ReviewBlock title="Signature">
-                        {form.signature ? (
-                          <img src={form.signature} alt="Signature" className="h-16 border rounded" />
-                        ) : (
-                          <p className="text-red-500">No signature</p>
-                        )}
-                      </ReviewBlock>
+                      <p className="text-xs text-slate-500">
+                        After submission, IPS will review your inquiry and send a quotation. ID upload and signature are required only after you accept the quotation.
+                      </p>
                     </div>
                     {errors.submit && (
                       <p className="text-red-500 text-sm mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">{errors.submit}</p>
@@ -365,7 +365,7 @@ export function RequestServicePage() {
                     </Button>
                   ) : <div />}
 
-                  {step < 6 ? (
+                  {step < TOTAL_STEPS ? (
                     <Button onClick={next} className="gap-2">
                       Continue <ArrowRight size={16} />
                     </Button>
@@ -374,7 +374,7 @@ export function RequestServicePage() {
                       {submitting ? (
                         <><Loader2 size={16} className="animate-spin" /> Submitting...</>
                       ) : (
-                        <><Check size={16} /> Submit Request</>
+                        <><Check size={16} /> Submit Inquiry</>
                       )}
                     </Button>
                   )}

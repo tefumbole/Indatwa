@@ -85,10 +85,11 @@ class IpsSeeder extends Seeder
 
         $adminId = DB::table('users')->insertGetId([
             'uuid' => (string) Str::uuid(),
+            'username' => 'admin',
             'name' => 'IPS Administrator',
-            'email' => 'admin@indatwa.rw',
-            'phone' => '+250780759253',
-            'password' => Hash::make('IPSAdmin@2026'),
+            'email' => 'admin@indatwagency.com',
+            'phone' => '+250794006160',
+            'password' => Hash::make('system'),
             'email_verified_at' => $now,
             'is_active' => true,
             'created_at' => $now,
@@ -198,8 +199,10 @@ class IpsSeeder extends Seeder
                 'name' => 'Indatwa Protocol & Services Agency',
                 'location' => 'Kimironko, Kigali, Rwanda',
                 'whatsapp' => '+250780759253',
+                'email' => 'info@indatwagency.com',
                 'video_url' => '',
             ]), 'created_at' => $now, 'updated_at' => $now],
+            ['key' => 'reviews_enabled', 'value' => json_encode(true), 'created_at' => $now, 'updated_at' => $now],
         ]);
     }
 }

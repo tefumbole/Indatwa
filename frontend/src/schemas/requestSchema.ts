@@ -16,31 +16,29 @@ export const clientStepSchema = z.object({
 export const eventStepSchema = z.object({
   event_title: z.string().min(3, 'Event title is required'),
   event_type: z.string().min(1, 'Event type is required'),
-  event_date: z.string().min(1, 'Event date is required'),
-  event_start_date: z.string().optional(),
+  event_start_date: z.string().min(1, 'Start date is required'),
+  event_start_time: z.string().optional(),
   event_end_date: z.string().optional(),
+  event_end_time: z.string().optional(),
   number_of_guests: z.coerce.number().int().min(1).optional().or(z.literal('')),
   venue: z.string().optional(),
   event_description: z.string().max(5000).optional(),
 })
 
-export const signatureStepSchema = z.object({
-  signature: z.string().min(50, 'Please draw your signature'),
-})
-
 export type ServicesStep = z.infer<typeof servicesStepSchema>
 export type ClientStep = z.infer<typeof clientStepSchema>
 export type EventStep = z.infer<typeof eventStepSchema>
-export type SignatureStep = z.infer<typeof signatureStepSchema>
 
 export interface DocumentFile {
   file: File
   type: 'passport' | 'national_id' | 'other_identification'
 }
 
-export interface RequestFormData extends ClientStep, EventStep, SignatureStep {
+export interface RequestFormData extends ClientStep, EventStep {
   services: number[]
-  documents: DocumentFile[]
+  event_date?: string
+  signature?: string
+  documents: never[]
 }
 
 export const EVENT_TYPES = [
@@ -50,5 +48,18 @@ export const EVENT_TYPES = [
 ]
 
 export const STEP_LABELS = [
-  'Services', 'Your Info', 'Event Details', 'Documents', 'Signature', 'Review',
+  'Services', 'Your Info', 'Event Details', 'Review',
 ]
+
+export const FORM_PLACEHOLDERS = {
+  client_name: 'Alpha Bridge Technologies / Sr. Engr. Mbole',
+  client_phone: '+250794006160',
+  client_email: 'info@alpha-bridge.net',
+  client_nationality: 'Rwandese',
+  client_country: 'Rwanda',
+  client_city: 'Kigali',
+  event_title: 'Corporate Launch Event',
+  venue: 'Kigali Convention Centre',
+  event_description: 'Describe your event requirements...',
+  number_of_guests: '100',
+}

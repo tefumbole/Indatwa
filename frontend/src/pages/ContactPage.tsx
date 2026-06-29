@@ -7,7 +7,7 @@ import { Clock, Mail, MapPin, MessageCircle, Phone } from 'lucide-react'
 const contactInfo = [
   { icon: MapPin, label: 'Location', value: 'Kimironko, Kigali, Rwanda' },
   { icon: Phone, label: 'WhatsApp', value: '+250 780 759 253', href: 'https://wa.me/250780759253' },
-  { icon: Mail, label: 'Email', value: 'info@indatwa.rw', href: 'mailto:info@indatwa.rw' },
+  { icon: Mail, label: 'Email', value: 'info@indatwagency.com', href: 'mailto:info@indatwagency.com' },
   { icon: Clock, label: 'Hours', value: 'Mon – Sat: 8:00 AM – 6:00 PM' },
 ]
 

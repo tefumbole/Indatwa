@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/Button'
 import { Seo } from '@/components/shared/Seo'
 import { useAuth } from '@/context/AuthContext'
 import { api, type AdminDashboardData } from '@/lib/api'
@@ -18,6 +19,8 @@ export function AdminDashboard() {
   const { token } = useAuth()
   const [data, setData] = useState<AdminDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [reviewsEnabled, setReviewsEnabled] = useState(true)
+  const [savingReviews, setSavingReviews] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -26,6 +29,15 @@ export function AdminDashboard() {
       setLoading(false)
     })
   }, [token])
+
+  const toggleReviews = async () => {
+    if (!token) return
+    setSavingReviews(true)
+    const next = !reviewsEnabled
+    const res = await api.updateReviewsEnabled(token, next)
+    if (res.success) setReviewsEnabled(next)
+    setSavingReviews(false)
+  }
 
   if (loading) {
     return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-ips-blue" /></div>
@@ -40,6 +52,16 @@ export function AdminDashboard() {
       <Seo title="Admin Dashboard" path="/admin" />
       <div className="max-w-6xl mx-auto">
         <h1 className="font-display text-2xl font-bold text-ips-blue dark:text-white mb-6">Dashboard</h1>
+
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-medium text-sm">Public client reviews</p>
+            <p className="text-xs text-slate-500">Show or hide reviews on the /reviews page</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={toggleReviews} disabled={savingReviews}>
+            {reviewsEnabled ? 'Reviews enabled' : 'Reviews disabled'}
+          </Button>
+        </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {STAT_CARDS.map((card, i) => (

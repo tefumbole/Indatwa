@@ -15,6 +15,9 @@ function DetailContent() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
+  const [reviewRating, setReviewRating] = useState(5)
+  const [reviewComment, setReviewComment] = useState('')
+  const [reviewSubmitted, setReviewSubmitted] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = () => {
@@ -42,6 +45,18 @@ function DetailContent() {
     await api.uploadPortalDocument(token, Number(id), file, 'additional')
     load()
     e.target.value = ''
+  }
+
+  const submitReview = async () => {
+    if (!token || !data) return
+    setSending(true)
+    const res = await api.submitReview(token, {
+      service_request_id: data.id,
+      rating: reviewRating,
+      comment: reviewComment || undefined,
+    })
+    setSending(false)
+    if (res.success) setReviewSubmitted(true)
   }
 
   if (loading) {
@@ -145,6 +160,23 @@ function DetailContent() {
               </Button>
             </div>
           </div>
+
+          {data.status === 'completed' && token && (
+            <div className="mb-6 p-4 rounded-xl bg-ips-blue/5 border border-ips-blue/10">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-ips-blue mb-3">Leave a Review</h3>
+              {reviewSubmitted ? (
+                <p className="text-sm text-green-600">Thank you! Your review has been submitted.</p>
+              ) : (
+                <div className="space-y-3">
+                  <select className="px-3 py-2 rounded-lg border text-sm" value={reviewRating} onChange={(e) => setReviewRating(Number(e.target.value))}>
+                    {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} stars</option>)}
+                  </select>
+                  <textarea className="w-full px-3 py-2 rounded-lg border text-sm" rows={3} placeholder="Share your experience..." value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} />
+                  <Button size="sm" onClick={submitReview} disabled={sending}>Submit Review</Button>
+                </div>
+              )}
+            </div>
+          )}
         </motion.div>
       </div>
     </div>

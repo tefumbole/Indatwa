@@ -11,6 +11,7 @@ const navLinks = [
   { label: 'Home', href: '/' },
   { label: 'About', href: '/about' },
   { label: 'Services', href: '/services' },
+  { label: 'Reviews', href: '/reviews' },
   { label: 'Gallery', href: '/gallery' },
   { label: 'Blog', href: '/blog' },
   { label: 'FAQ', href: '/faq' },
@@ -43,7 +44,7 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3 group">
           <img
-            src="/logo.svg"
+            src="/build/logo.svg"
             alt="IPS Logo"
             className="h-10 w-10 object-contain transition-transform group-hover:scale-105"
           />

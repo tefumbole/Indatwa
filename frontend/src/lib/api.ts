@@ -1,4 +1,4 @@
-import type { DocumentFile, RequestFormData } from '@/schemas/requestSchema'
+import type { RequestFormData } from '@/schemas/requestSchema'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
 
@@ -163,6 +163,14 @@ export interface Testimonial {
   rating: number
 }
 
+export interface ServiceReview {
+  id: number
+  client_name: string
+  rating: number
+  comment: string | null
+  created_at: string
+}
+
 export interface SubmitRequestResult {
   reference_number: string
   tracking_token: string
@@ -258,8 +266,9 @@ function buildRequestFormData(data: RequestFormData): FormData {
 
   const fields: (keyof RequestFormData)[] = [
     'client_name', 'client_phone', 'client_email', 'client_nationality',
-    'client_country', 'client_city', 'event_title', 'event_type', 'event_date',
-    'event_start_date', 'event_end_date', 'venue', 'event_description', 'signature',
+    'client_country', 'client_city', 'event_title', 'event_type',
+    'event_start_date', 'event_end_date', 'event_start_time', 'event_end_time',
+    'venue', 'event_description',
   ]
 
   for (const key of fields) {
@@ -269,14 +278,17 @@ function buildRequestFormData(data: RequestFormData): FormData {
     }
   }
 
+  if (data.event_start_date) {
+    form.append('event_date', data.event_start_date)
+  }
+
+  if (data.signature) {
+    form.append('signature', data.signature)
+  }
+
   if (data.number_of_guests) {
     form.append('number_of_guests', String(data.number_of_guests))
   }
-
-  data.documents.forEach((doc: DocumentFile) => {
-    form.append('documents[]', doc.file)
-    form.append('document_types[]', doc.type)
-  })
 
   return form
 }
@@ -289,6 +301,7 @@ export const api = {
   getBlogPosts: () => fetchApi<BlogPost[]>('/blog?per_page=20'),
   getBlogPost: (slug: string) => fetchApi<BlogPost>(`/blog/${slug}`),
   getTestimonials: () => fetchApi<Testimonial[]>('/testimonials'),
+  getReviews: () => fetchApi<ServiceReview[]>('/reviews'),
   submitContact: (data: { name: string; email?: string; phone: string; subject: string; message: string }) =>
     postApi('/contact', data),
 
@@ -324,7 +337,7 @@ export const api = {
   register: (data: { name: string; phone: string; password: string; password_confirmation: string; email?: string }) =>
     postApi<AuthResult>('/auth/register', data),
 
-  login: (data: { phone?: string; email?: string; password: string }) =>
+  login: (data: { username?: string; phone?: string; email?: string; password: string }) =>
     postApi<AuthResult>('/auth/login', data),
 
   requestOtp: (phone: string, context: 'login' | 'register' = 'login') =>
@@ -339,6 +352,9 @@ export const api = {
   getMe: (token: string) => authFetch<AuthUser>('/auth/me', token),
 
   logout: (token: string) => postApi('/auth/logout', {}, token),
+
+  submitReview: (token: string, data: { service_request_id: number; rating: number; comment?: string }) =>
+    postApi('/reviews', data, token),
 
   // Client portal
   getPortalRequests: (token: string) => authFetch<PortalRequestSummary[]>('/portal/requests', token),
@@ -411,6 +427,12 @@ export const api = {
 
   addAdminMessage: (token: string, id: number, message: string, is_internal = true) =>
     postApi(`/admin/requests/${id}/messages`, { message, is_internal }, token),
+
+  setAdminQuotation: (token: string, id: number, data: { quoted_amount: number; quotation_notes?: string; send_to_client?: boolean }) =>
+    postApi(`/admin/requests/${id}/quotation`, data, token),
+
+  updateReviewsEnabled: (token: string, enabled: boolean) =>
+    patchApi('/admin/settings/reviews', { enabled }, token),
 
   getAdminStaff: (token: string) => authFetch<StaffMember[]>('/admin/staff', token),
 

@@ -23,6 +23,8 @@ export function AdminRequestDetail() {
   const [assignId, setAssignId] = useState<string>('')
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [quotedAmount, setQuotedAmount] = useState('')
+  const [quotationNotes, setQuotationNotes] = useState('')
 
   const load = () => {
     if (!token || !id) return
@@ -78,6 +80,18 @@ export function AdminRequestDetail() {
     if (!token || !id || !message.trim()) return
     await api.addAdminMessage(token, Number(id), message)
     setMessage('')
+    load()
+  }
+
+  const sendQuotation = async () => {
+    if (!token || !id || !quotedAmount) return
+    setSaving(true)
+    await api.setAdminQuotation(token, Number(id), {
+      quoted_amount: Number(quotedAmount),
+      quotation_notes: quotationNotes || undefined,
+      send_to_client: true,
+    })
+    setSaving(false)
     load()
   }
 
@@ -153,6 +167,30 @@ export function AdminRequestDetail() {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border mb-6">
+        <h3 className="font-semibold mb-3">Quotation & Invoice</h3>
+        <p className="text-xs text-slate-500 mb-3">Prepare a quotation after reviewing the inquiry. Client signs and pays after accepting.</p>
+        <div className="grid sm:grid-cols-2 gap-3 mb-3">
+          <input
+            className="px-3 py-2 rounded-lg border text-sm"
+            type="number"
+            min={0}
+            placeholder="Quoted amount (RWF)"
+            value={quotedAmount}
+            onChange={(e) => setQuotedAmount(e.target.value)}
+          />
+          <input
+            className="px-3 py-2 rounded-lg border text-sm sm:col-span-1"
+            placeholder="Quotation notes"
+            value={quotationNotes}
+            onChange={(e) => setQuotationNotes(e.target.value)}
+          />
+        </div>
+        <Button size="sm" onClick={sendQuotation} disabled={saving || !quotedAmount}>
+          Send Quotation & Create Invoice
+        </Button>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border mb-6">

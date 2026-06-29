@@ -9,6 +9,7 @@ import { AdminRequestDetail } from '@/pages/admin/AdminRequestDetail'
 import { AdminRequests } from '@/pages/admin/AdminRequests'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
+import { ReviewsPage } from '@/pages/ReviewsPage'
 import { PortalDashboard } from '@/pages/portal/PortalDashboard'
 import { PortalRequestDetail } from '@/pages/portal/PortalRequestDetail'
 import { AboutPage } from '@/pages/AboutPage'
@@ -33,6 +34,7 @@ function PublicSite() {
           <Route path="/" element={<HomePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/services" element={<ServicesPage />} />
+          <Route path="/reviews" element={<ReviewsPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/blog/:slug" element={<BlogDetailPage />} />

@@ -2,11 +2,12 @@
 
 use App\Http\Controllers\Api\V1\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\AdminRequestController;
+use App\Http\Controllers\Api\V1\Admin\AdminSettingsController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Portal\PortalController;
 use App\Http\Controllers\Api\V1\Open\BlogController;
 use App\Http\Controllers\Api\V1\Open\ContactController;
-use App\Http\Controllers\Api\V1\Open\ServiceController;
+use App\Http\Controllers\Api\V1\Open\ReviewController;
 use App\Http\Controllers\Api\V1\Open\ServiceRequestController;
 use App\Http\Controllers\Api\V1\Open\SiteController;
 use App\Http\Controllers\Api\V1\Webhooks\WasenderWebhookController;
@@ -23,6 +24,8 @@ Route::prefix('v1')->group(function () {
     Route::get('/track/{token}/pdf', [ServiceRequestController::class, 'downloadPdf']);
     Route::get('/settings/public', [SiteController::class, 'publicSettings']);
     Route::get('/testimonials', [SiteController::class, 'testimonials']);
+    Route::get('/reviews', [ReviewController::class, 'index']);
+    Route::post('/reviews', [ReviewController::class, 'store'])->middleware('auth:sanctum');
     Route::get('/faqs', [SiteController::class, 'faqs']);
     Route::get('/gallery', [SiteController::class, 'gallery']);
     Route::get('/blog', [BlogController::class, 'index']);
@@ -74,5 +77,8 @@ Route::prefix('v1')->group(function () {
         Route::patch('/requests/{id}/notes', [AdminRequestController::class, 'updateNotes']);
         Route::patch('/requests/{id}/assign', [AdminRequestController::class, 'assign']);
         Route::post('/requests/{id}/messages', [AdminRequestController::class, 'addMessage']);
+        Route::post('/requests/{id}/quotation', [AdminRequestController::class, 'setQuotation']);
+        Route::get('/settings', [AdminSettingsController::class, 'index']);
+        Route::patch('/settings/reviews', [AdminSettingsController::class, 'updateReviews']);
     });
 });

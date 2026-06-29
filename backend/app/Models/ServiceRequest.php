@@ -14,10 +14,12 @@ class ServiceRequest extends Model
         'client_name', 'client_nationality', 'client_country', 'client_city',
         'client_phone', 'client_email',
         'event_title', 'event_type', 'event_date', 'event_start_date', 'event_end_date',
+        'event_start_time', 'event_end_time',
         'number_of_guests', 'venue', 'event_description',
         'signature_path', 'pdf_path', 'tracking_token',
         'assigned_to', 'reviewed_by', 'reviewed_at',
-        'admin_notes', 'client_notes', 'submitted_at',
+        'admin_notes', 'client_notes', 'quoted_amount', 'quotation_notes', 'quotation_sent_at',
+        'submitted_at',
     ];
 
     protected $casts = [

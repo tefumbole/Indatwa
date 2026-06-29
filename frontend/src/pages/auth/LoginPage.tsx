@@ -17,6 +17,7 @@ export function LoginPage() {
   const [error, setError] = useState('')
   const [otpSent, setOtpSent] = useState(false)
 
+  const [loginId, setLoginId] = useState('')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [otp, setOtp] = useState('')
@@ -28,7 +29,13 @@ export function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const result = await api.login({ phone, password })
+    const id = loginId.trim()
+    const payload = id.includes('@')
+      ? { email: id, password }
+      : /^\+?\d[\d\s-]+$/.test(id)
+        ? { phone: id, password }
+        : { username: id, password }
+    const result = await api.login(payload)
     setLoading(false)
 
     if (!result.success) {
@@ -107,8 +114,8 @@ export function LoginPage() {
       <Seo title="Login" path="/login" />
       <div className="min-h-screen pt-28 pb-16 px-4 flex items-center justify-center">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full glass rounded-2xl p-8">
-          <h1 className="font-display text-2xl font-bold text-ips-blue dark:text-white mb-2">Client Login</h1>
-          <p className="text-slate-500 text-sm mb-6">Access your requests and track service status.</p>
+          <h1 className="font-display text-2xl font-bold text-ips-blue dark:text-white mb-2">Login</h1>
+          <p className="text-slate-500 text-sm mb-6">Clients use phone; admins can use username <strong>admin</strong>.</p>
 
           <div className="flex gap-2 mb-6">
             {(['password', 'otp'] as const).map((t) => (
@@ -126,7 +133,7 @@ export function LoginPage() {
 
           {tab === 'password' ? (
             <form onSubmit={handlePasswordLogin} className="space-y-4">
-              <input className={inputClass} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone (+250...)" required />
+              <input className={inputClass} value={loginId} onChange={(e) => setLoginId(e.target.value)} placeholder="Username, email or phone" required />
               <input className={inputClass} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" required />
               {error && <p className="text-red-500 text-sm">{error}</p>}
               <Button type="submit" disabled={loading} className="w-full gap-2">

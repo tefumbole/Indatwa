@@ -11,6 +11,7 @@ use App\Services\RequestPdfService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -39,23 +40,31 @@ class ServiceRequestController extends Controller
             'client_city' => 'nullable|string|max:100',
             'event_title' => 'required|string|max:255',
             'event_type' => 'required|string|max:100',
-            'event_date' => 'required|date',
-            'event_start_date' => 'nullable|date',
+            'event_date' => 'nullable|date',
+            'event_start_date' => 'required|date',
             'event_end_date' => 'nullable|date|after_or_equal:event_start_date',
+            'event_start_time' => 'nullable|date_format:H:i',
+            'event_end_time' => 'nullable|date_format:H:i',
             'number_of_guests' => 'nullable|integer|min:1',
             'venue' => 'nullable|string|max:500',
             'event_description' => 'nullable|string|max:5000',
-            'signature' => 'required|string',
+            'signature' => 'nullable|string',
             'documents' => 'nullable|array|max:5',
             'documents.*' => 'file|mimes:pdf,jpg,jpeg,png|max:10240',
             'document_types' => 'nullable|array',
             'document_types.*' => 'in:passport,national_id,other_identification',
         ]);
 
+        if (empty($validated['event_date'])) {
+            $validated['event_date'] = $validated['event_start_date'];
+        }
+
         $serviceRequest = DB::transaction(function () use ($validated, $request) {
             $reference = $this->referenceNumbers->generate('request', 'IPS');
             $trackingToken = Str::random(64);
-            $signaturePath = $this->storeSignature($validated['signature'], $reference);
+            $signaturePath = ! empty($validated['signature'])
+                ? $this->storeSignature($validated['signature'], $reference)
+                : null;
 
             $serviceRequest = ServiceRequest::create([
                 ...collect($validated)->except(['services', 'signature', 'documents', 'document_types'])->toArray(),
@@ -88,10 +97,19 @@ class ServiceRequestController extends Controller
             return $serviceRequest->load(['items', 'documents']);
         });
 
-        $this->pdfService->generate($serviceRequest);
-        $pdfUrl = $this->pdfService->getPublicUrl($serviceRequest->fresh());
+        $pdfUrl = null;
+        try {
+            $this->pdfService->generate($serviceRequest);
+            $pdfUrl = $this->pdfService->getPublicUrl($serviceRequest->fresh());
+        } catch (\Throwable $e) {
+            Log::error('Request PDF generation failed: '.$e->getMessage());
+        }
 
-        SendRequestSubmittedNotifications::dispatch($serviceRequest->id);
+        try {
+            SendRequestSubmittedNotifications::dispatch($serviceRequest->id);
+        } catch (\Throwable $e) {
+            Log::error('Request notification dispatch failed: '.$e->getMessage());
+        }
 
         return response()->json([
             'success' => true,
@@ -151,10 +169,13 @@ class ServiceRequestController extends Controller
         );
     }
 
-    private function storeSignature(string $base64, string $reference): string
+    private function storeSignature(string $base64, string $reference): ?string
     {
         $data = preg_replace('#^data:image/\w+;base64,#i', '', $base64);
-        $decoded = base64_decode($data);
+        $decoded = base64_decode($data, true);
+        if ($decoded === false || strlen($decoded) < 100) {
+            return null;
+        }
         $path = "signatures/{$reference}.png";
         Storage::disk('local')->put($path, $decoded);
 
