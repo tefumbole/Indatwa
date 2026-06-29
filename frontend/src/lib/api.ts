@@ -1,6 +1,7 @@
 import type { RequestFormData } from '@/schemas/requestSchema'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+const API_BASE = import.meta.env.VITE_API_URL
+  || (typeof window !== 'undefined' ? `${window.location.origin}/api/v1` : 'http://localhost:8000/api/v1')
 
 interface ApiResponse<T> {
   success: boolean
@@ -471,12 +472,31 @@ export const api = {
       const form = buildRequestFormData(data)
       const headers: Record<string, string> = { Accept: 'application/json' }
       if (token) headers.Authorization = `Bearer ${token}`
+
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 120000)
+
       const res = await fetch(`${API_BASE}/requests/submit`, {
         method: 'POST',
         headers,
         body: form,
+        signal: controller.signal,
       })
-      const json = await res.json()
+      clearTimeout(timeout)
+
+      const text = await res.text()
+      let json: ApiResponse<SubmitRequestResult>
+      try {
+        json = text ? JSON.parse(text) : { success: false, message: 'Empty server response' }
+      } catch {
+        return {
+          success: false,
+          message: res.ok
+            ? 'Unexpected server response. Please try again.'
+            : `Server error (${res.status}). Please try again in a moment.`,
+        }
+      }
+
       if (!res.ok) {
         return {
           success: false,
@@ -485,7 +505,13 @@ export const api = {
         }
       }
       return json
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        return {
+          success: false,
+          message: 'Request timed out. If you received a WhatsApp confirmation, your request was submitted.',
+        }
+      }
       return { success: false, message: 'Network error. Please check your connection and try again.' }
     }
   },

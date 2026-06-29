@@ -97,28 +97,36 @@ class ServiceRequestController extends Controller
             return $serviceRequest->load(['items', 'documents']);
         });
 
-        $pdfUrl = null;
-        try {
-            $this->pdfService->generate($serviceRequest);
-            $pdfUrl = $this->pdfService->getPublicUrl($serviceRequest->fresh());
-        } catch (\Throwable $e) {
-            Log::error('Request PDF generation failed: '.$e->getMessage());
-        }
+        $requestId = $serviceRequest->id;
+        $trackingUrl = config('app.frontend_url').'/track/'.$serviceRequest->tracking_token;
 
-        try {
-            app(\App\Services\Notifications\RequestNotificationService::class)
-                ->sendSubmitted($serviceRequest->load(['items', 'documents']));
-        } catch (\Throwable $e) {
-            Log::error('Request notification failed: '.$e->getMessage());
-        }
+        app()->terminating(function () use ($requestId) {
+            $fresh = ServiceRequest::with(['items', 'documents'])->find($requestId);
+            if (! $fresh) {
+                return;
+            }
+
+            try {
+                app(RequestPdfService::class)->generate($fresh);
+            } catch (\Throwable $e) {
+                Log::error('Request PDF generation failed: '.$e->getMessage());
+            }
+
+            try {
+                app(RequestNotificationService::class)
+                    ->sendSubmitted($fresh->fresh(['items', 'documents']));
+            } catch (\Throwable $e) {
+                Log::error('Request notification failed: '.$e->getMessage());
+            }
+        });
 
         return response()->json([
             'success' => true,
             'data' => [
                 'reference_number' => $serviceRequest->reference_number,
                 'tracking_token' => $serviceRequest->tracking_token,
-                'tracking_url' => config('app.frontend_url').'/track/'.$serviceRequest->tracking_token,
-                'pdf_url' => $pdfUrl,
+                'tracking_url' => $trackingUrl,
+                'pdf_url' => null,
                 'status' => $serviceRequest->status,
             ],
         ], 201);
