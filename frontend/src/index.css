@@ -4,8 +4,9 @@
   --color-ips-blue: #0B3D91;
   --color-ips-blue-dark: #082d6b;
   --color-ips-blue-light: #1a5cb8;
-  --color-ips-gold: #D4AF37;
-  --color-ips-gold-light: #e8c96a;
+  --color-ips-gold: #FACC15;
+  --color-ips-gold-dark: #EAB308;
+  --color-ips-gold-light: #FDE047;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-display: "Playfair Display", Georgia, serif;
 }
@@ -36,5 +37,13 @@
 
   .text-gradient-gold {
     @apply bg-gradient-to-r from-ips-gold to-ips-gold-light bg-clip-text text-transparent;
+  }
+
+  .admin-card {
+    @apply bg-white rounded-2xl shadow-sm border border-slate-100;
+  }
+
+  .request-page-bg {
+    background: linear-gradient(160deg, #051a45 0%, #0B3D91 45%, #082d6b 100%);
   }
 }

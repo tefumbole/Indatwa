@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1\Open;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\SendRequestSubmittedNotifications;
 use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Services\ReferenceNumberService;
@@ -106,9 +105,10 @@ class ServiceRequestController extends Controller
         }
 
         try {
-            SendRequestSubmittedNotifications::dispatch($serviceRequest->id);
+            app(\App\Services\Notifications\RequestNotificationService::class)
+                ->sendSubmitted($serviceRequest->load(['items', 'documents']));
         } catch (\Throwable $e) {
-            Log::error('Request notification dispatch failed: '.$e->getMessage());
+            Log::error('Request notification failed: '.$e->getMessage());
         }
 
         return response()->json([

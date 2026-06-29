@@ -5,7 +5,7 @@ namespace App\Jobs;
 use App\Models\ServiceRequest;
 use App\Services\Notifications\RequestNotificationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Bus\Queueable;
 use Illuminate\Support\Facades\Log;
 
 class SendRequestSubmittedNotifications implements ShouldQueue

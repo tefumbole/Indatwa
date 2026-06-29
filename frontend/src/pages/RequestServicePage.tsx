@@ -13,8 +13,8 @@ import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
-const inputClass = 'w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-ips-blue/30 focus:border-ips-blue outline-none transition text-sm'
-const labelClass = 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5'
+const inputClass = 'w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/40 focus:ring-2 focus:ring-ips-gold/40 focus:border-ips-gold outline-none transition text-sm'
+const labelClass = 'block text-sm font-medium text-white/80 mb-1.5'
 
 const TOTAL_STEPS = STEP_LABELS.length
 
@@ -157,28 +157,28 @@ export function RequestServicePage() {
         description="Submit an event inquiry to Indatwa Protocol & Services Agency. Our team will review your request and send a quotation."
         path="/request"
       />
-      <div className="min-h-screen pt-28 pb-16 px-4">
+      <div className="min-h-screen request-page-bg pt-28 pb-16 px-4">
         <div className="max-w-3xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <Link to="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-ips-blue mb-8">
+            <Link to="/" className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-ips-gold mb-8 transition-colors">
               <ArrowLeft size={16} /> Back to Home
             </Link>
 
-            <h1 className="font-display text-3xl font-bold text-ips-blue dark:text-white mb-2">
-              Request Service
+            <h1 className="font-display text-4xl font-bold text-white mb-2">
+              Request <span className="text-ips-gold">Service</span>
             </h1>
-            <p className="text-slate-600 dark:text-slate-400 mb-2">
-              Step {step} of {TOTAL_STEPS} — {STEP_LABELS[step - 1]}
+            <p className="text-white/70 mb-2">
+              Step {step} of {TOTAL_STEPS} — <span className="text-ips-gold font-semibold">{STEP_LABELS[step - 1]}</span>
             </p>
-            <p className="text-xs text-slate-500 mb-8">
+            <p className="text-xs text-white/50 mb-8">
               Submit your inquiry first. After admin review and quotation, you will sign and attach ID when you accept.
             </p>
 
             <div className="flex gap-1.5 mb-10">
               {STEP_LABELS.map((label, i) => (
                 <div key={label} className="flex-1">
-                  <div className={`h-1.5 rounded-full transition-colors ${i + 1 <= step ? 'bg-ips-blue' : 'bg-slate-200 dark:bg-slate-700'}`} />
-                  <p className={`text-[10px] mt-1 hidden sm:block ${i + 1 === step ? 'text-ips-blue font-semibold' : 'text-slate-400'}`}>
+                  <div className={`h-2 rounded-full transition-colors ${i + 1 <= step ? 'bg-ips-gold shadow-lg shadow-ips-gold/30' : 'bg-white/10'}`} />
+                  <p className={`text-[10px] mt-1.5 hidden sm:block font-medium ${i + 1 === step ? 'text-ips-gold' : 'text-white/40'}`}>
                     {label}
                   </p>
                 </div>
@@ -192,13 +192,13 @@ export function RequestServicePage() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.25 }}
-                className="glass rounded-2xl p-6 sm:p-8"
+                className="rounded-2xl p-6 sm:p-8 bg-[#0a2560]/80 backdrop-blur-xl border border-white/10 shadow-2xl"
               >
                 {step === 1 && (
                   <>
-                    <h2 className="font-semibold text-lg text-ips-blue dark:text-white mb-6">Select Services</h2>
+                    <h2 className="font-semibold text-lg text-ips-gold mb-6">Select Services</h2>
                     {loading ? (
-                      <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-ips-blue" /></div>
+                      <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-ips-gold" /></div>
                     ) : (
                       <div className="grid sm:grid-cols-2 gap-3">
                         {services.map((service) => (
@@ -206,33 +206,33 @@ export function RequestServicePage() {
                             key={service.id}
                             className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
                               form.services.includes(service.id)
-                                ? 'border-ips-blue bg-ips-blue/5 dark:border-ips-gold dark:bg-ips-gold/5'
-                                : 'border-slate-200 dark:border-slate-700 hover:border-ips-blue/30'
+                                ? 'border-ips-gold bg-ips-gold/10 shadow-lg shadow-ips-gold/10'
+                                : 'border-white/15 hover:border-ips-gold/40 bg-white/5'
                             }`}
                           >
                             <input
                               type="checkbox"
                               checked={form.services.includes(service.id)}
                               onChange={() => toggleService(service.id)}
-                              className="w-4 h-4 accent-ips-blue mt-0.5"
+                              className="w-4 h-4 accent-ips-gold mt-0.5"
                             />
                             <div>
-                              <span className="text-sm font-medium block">{service.name}</span>
+                              <span className="text-sm font-semibold text-white block">{service.name}</span>
                               {service.short_description && (
-                                <span className="text-xs text-slate-500">{service.short_description}</span>
+                                <span className="text-xs text-white/50">{service.short_description}</span>
                               )}
                             </div>
                           </label>
                         ))}
                       </div>
                     )}
-                    {errors.services && <p className="text-red-500 text-xs mt-3">{errors.services}</p>}
+                    {errors.services && <p className="text-red-400 text-xs mt-3">{errors.services}</p>}
                   </>
                 )}
 
                 {step === 2 && (
                   <>
-                    <h2 className="font-semibold text-lg text-ips-blue dark:text-white mb-6">Personal Information</h2>
+                    <h2 className="font-semibold text-lg text-ips-gold mb-6">Personal Information</h2>
                     <div className="space-y-4">
                       <div>
                         <label className={labelClass}>Full Name / Organization *</label>
@@ -271,7 +271,7 @@ export function RequestServicePage() {
 
                 {step === 3 && (
                   <>
-                    <h2 className="font-semibold text-lg text-ips-blue dark:text-white mb-6">Event Information</h2>
+                    <h2 className="font-semibold text-lg text-ips-gold mb-6">Event Information</h2>
                     <div className="space-y-4">
                       <div>
                         <label className={labelClass}>Event Title *</label>
@@ -327,50 +327,50 @@ export function RequestServicePage() {
 
                 {step === 4 && (
                   <>
-                    <h2 className="font-semibold text-lg text-ips-blue dark:text-white mb-6">Review & Submit</h2>
+                    <h2 className="font-semibold text-lg text-ips-gold mb-6">Review & Submit</h2>
                     <div className="space-y-6 text-sm">
                       <ReviewBlock title="Services">
-                        <ul className="list-disc list-inside text-slate-600 dark:text-slate-400">
+                        <ul className="list-disc list-inside text-white/70">
                           {selectedServices.map((s) => <li key={s.id}>{s.name}</li>)}
                         </ul>
                       </ReviewBlock>
                       <ReviewBlock title="Client">
-                        <p>{form.client_name} — {form.client_phone}</p>
-                        {form.client_email && <p>{form.client_email}</p>}
+                        <p className="text-white/80">{form.client_name} — {form.client_phone}</p>
+                        {form.client_email && <p className="text-white/70">{form.client_email}</p>}
                         {(form.client_nationality || form.client_country) && (
-                          <p>{[form.client_nationality, form.client_city, form.client_country].filter(Boolean).join(', ')}</p>
+                          <p className="text-white/70">{[form.client_nationality, form.client_city, form.client_country].filter(Boolean).join(', ')}</p>
                         )}
                       </ReviewBlock>
                       <ReviewBlock title="Event">
-                        <p><strong>{form.event_title}</strong> — {form.event_type}</p>
-                        <p>Schedule: {formatEventSchedule()}</p>
-                        {form.venue && <p>Venue: {form.venue}</p>}
-                        {form.number_of_guests && <p>Guests: {form.number_of_guests}</p>}
-                        {form.event_description && <p className="text-slate-500 mt-1">{form.event_description}</p>}
+                        <p className="text-white/80"><strong className="text-white">{form.event_title}</strong> — {form.event_type}</p>
+                        <p className="text-white/70">Schedule: {formatEventSchedule()}</p>
+                        {form.venue && <p className="text-white/70">Venue: {form.venue}</p>}
+                        {form.number_of_guests && <p className="text-white/70">Guests: {form.number_of_guests}</p>}
+                        {form.event_description && <p className="text-white/50 mt-1">{form.event_description}</p>}
                       </ReviewBlock>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-white/40">
                         After submission, IPS will review your inquiry and send a quotation. ID upload and signature are required only after you accept the quotation.
                       </p>
                     </div>
                     {errors.submit && (
-                      <p className="text-red-500 text-sm mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">{errors.submit}</p>
+                      <p className="text-red-300 text-sm mt-4 p-3 bg-red-900/40 border border-red-500/30 rounded-xl">{errors.submit}</p>
                     )}
                   </>
                 )}
 
-                <div className="flex justify-between mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex justify-between mt-8 pt-6 border-t border-white/10">
                   {step > 1 ? (
-                    <Button variant="outline" onClick={back} className="gap-2">
+                    <Button variant="outline" onClick={back} className="gap-2 border-ips-gold text-ips-gold hover:bg-ips-gold hover:text-ips-blue">
                       <ArrowLeft size={16} /> Back
                     </Button>
                   ) : <div />}
 
                   {step < TOTAL_STEPS ? (
-                    <Button onClick={next} className="gap-2">
+                    <Button variant="secondary" onClick={next} className="gap-2">
                       Continue <ArrowRight size={16} />
                     </Button>
                   ) : (
-                    <Button onClick={submit} disabled={submitting} className="gap-2">
+                    <Button onClick={submit} disabled={submitting} className="gap-2 bg-ips-blue hover:bg-ips-blue-light border border-white/10">
                       {submitting ? (
                         <><Loader2 size={16} className="animate-spin" /> Submitting...</>
                       ) : (
@@ -390,8 +390,8 @@ export function RequestServicePage() {
 
 function ReviewBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-      <h3 className="font-semibold text-ips-blue dark:text-ips-gold text-xs uppercase tracking-wider mb-2">{title}</h3>
+    <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+      <h3 className="font-semibold text-ips-gold text-xs uppercase tracking-wider mb-2">{title}</h3>
       {children}
     </div>
   )

@@ -1,3 +1,4 @@
+import { AdminTabBar } from '@/components/admin/AdminTabBar'
 import { Button } from '@/components/ui/Button'
 import { Seo } from '@/components/shared/Seo'
 import { useAuth } from '@/context/AuthContext'
@@ -34,7 +35,18 @@ export function AdminRequests() {
     <>
       <Seo title="Manage Requests" path="/admin/requests" />
       <div className="max-w-6xl mx-auto">
-        <h1 className="font-display text-2xl font-bold text-ips-blue dark:text-white mb-6">Service Requests</h1>
+        <h1 className="text-3xl font-bold text-ips-blue mb-2">Service Requests</h1>
+        <p className="text-slate-600 text-sm mb-6">Review, approve, or deny client inquiries</p>
+
+        <AdminTabBar
+          section="Operations"
+          tabs={[
+            { label: 'All Requests', active: !status, onClick: () => setStatus(''), color: 'blue' },
+            { label: 'Submitted', active: status === 'submitted', onClick: () => setStatus('submitted'), color: 'gold' },
+            { label: 'Under Review', active: status === 'under_review', onClick: () => setStatus('under_review'), color: 'purple' },
+            { label: 'In Progress', active: status === 'in_progress', onClick: () => setStatus('in_progress'), color: 'green' },
+          ]}
+        />
 
         <div className="flex flex-wrap gap-3 mb-6">
           <div className="relative flex-1 min-w-[200px]">
@@ -63,7 +75,7 @@ export function AdminRequests() {
         {loading ? (
           <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-ips-blue" /></div>
         ) : (
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+          <div className="admin-card overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 dark:bg-slate-800/50 text-left">
                 <tr>

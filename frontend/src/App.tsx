@@ -7,6 +7,8 @@ import { ThemeProvider } from '@/context/ThemeContext'
 import { AdminDashboard } from '@/pages/admin/AdminDashboard'
 import { AdminRequestDetail } from '@/pages/admin/AdminRequestDetail'
 import { AdminRequests } from '@/pages/admin/AdminRequests'
+import { AdminTasks } from '@/pages/admin/AdminTasks'
+import { AdminUsers } from '@/pages/admin/AdminUsers'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { ReviewsPage } from '@/pages/ReviewsPage'
@@ -65,6 +67,8 @@ function App() {
                 <Route index element={<AdminDashboard />} />
                 <Route path="requests" element={<AdminRequests />} />
                 <Route path="requests/:id" element={<AdminRequestDetail />} />
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="tasks" element={<AdminTasks />} />
               </Route>
             </Route>
             <Route path="/*" element={<PublicSite />} />

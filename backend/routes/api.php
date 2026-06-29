@@ -3,11 +3,14 @@
 use App\Http\Controllers\Api\V1\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\AdminRequestController;
 use App\Http\Controllers\Api\V1\Admin\AdminSettingsController;
+use App\Http\Controllers\Api\V1\Admin\AdminTaskController;
+use App\Http\Controllers\Api\V1\Admin\AdminUserController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Portal\PortalController;
 use App\Http\Controllers\Api\V1\Open\BlogController;
 use App\Http\Controllers\Api\V1\Open\ContactController;
 use App\Http\Controllers\Api\V1\Open\ReviewController;
+use App\Http\Controllers\Api\V1\Open\ServiceController;
 use App\Http\Controllers\Api\V1\Open\ServiceRequestController;
 use App\Http\Controllers\Api\V1\Open\SiteController;
 use App\Http\Controllers\Api\V1\Webhooks\WasenderWebhookController;
@@ -80,5 +83,19 @@ Route::prefix('v1')->group(function () {
         Route::post('/requests/{id}/quotation', [AdminRequestController::class, 'setQuotation']);
         Route::get('/settings', [AdminSettingsController::class, 'index']);
         Route::patch('/settings/reviews', [AdminSettingsController::class, 'updateReviews']);
+
+        Route::middleware('role:super_admin,director,operations_manager')->group(function () {
+            Route::get('/users', [AdminUserController::class, 'index']);
+            Route::get('/users/roles', [AdminUserController::class, 'roles']);
+            Route::post('/users', [AdminUserController::class, 'store']);
+            Route::patch('/users/{id}', [AdminUserController::class, 'update']);
+            Route::delete('/users/{id}', [AdminUserController::class, 'destroy']);
+
+            Route::get('/tasks', [AdminTaskController::class, 'index']);
+            Route::get('/tasks/mine', [AdminTaskController::class, 'myTasks']);
+            Route::post('/tasks', [AdminTaskController::class, 'store']);
+            Route::patch('/tasks/{id}', [AdminTaskController::class, 'update']);
+            Route::delete('/tasks/{id}', [AdminTaskController::class, 'destroy']);
+        });
     });
 });

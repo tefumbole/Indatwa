@@ -41,6 +41,34 @@ async function postApi<T>(endpoint: string, body: unknown, token?: string): Prom
   }
 }
 
+async function deleteApi<T>(endpoint: string, token: string): Promise<ApiResponse<T>> {
+  try {
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      method: 'DELETE',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    })
+    return await res.json()
+  } catch {
+    return { success: false, message: 'Network error.' }
+  }
+}
+
+async function postAuthApi<T>(endpoint: string, body: unknown, token: string): Promise<ApiResponse<T>> {
+  try {
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    })
+    return await res.json()
+  } catch {
+    return { success: false, message: 'Network error.' }
+  }
+}
 async function patchApi<T>(endpoint: string, body: unknown, token: string): Promise<ApiResponse<T>> {
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -245,6 +273,38 @@ export interface StaffMember {
   email: string | null
 }
 
+export interface AdminUser {
+  id: number
+  name: string
+  username: string | null
+  email: string | null
+  phone: string
+  is_active: boolean
+  roles: string[]
+  role_labels?: string[]
+  created_at?: string
+}
+
+export interface RoleOption {
+  id: number
+  name: string
+  display_name: string
+}
+
+export interface StaffTask {
+  id: number
+  title: string
+  description: string | null
+  status: string
+  priority: string
+  due_date: string | null
+  completed_at: string | null
+  created_at: string | null
+  assigned_to: { id: number; name: string; email?: string | null } | null
+  created_by: { id: number; name: string } | null
+  service_request: { id: number; reference_number: string; client_name: string; event_title: string } | null
+}
+
 export interface TrackRequestResult {
   reference_number: string
   status: string
@@ -435,6 +495,36 @@ export const api = {
     patchApi('/admin/settings/reviews', { enabled }, token),
 
   getAdminStaff: (token: string) => authFetch<StaffMember[]>('/admin/staff', token),
+
+  getAdminUsers: (token: string) => authFetch<AdminUser[]>('/admin/users', token),
+
+  getAdminRoles: (token: string) => authFetch<RoleOption[]>('/admin/users/roles', token),
+
+  createAdminUser: (token: string, data: {
+    name: string; phone: string; password: string; email?: string; username?: string; roles: string[]
+  }) => postAuthApi<AdminUser>('/admin/users', data, token),
+
+  updateAdminUser: (token: string, id: number, data: Partial<{
+    name: string; phone: string; password: string; email: string; username: string; roles: string[]; is_active: boolean
+  }>) => patchApi(`/admin/users/${id}`, data, token),
+
+  deleteAdminUser: (token: string, id: number) => deleteApi(`/admin/users/${id}`, token),
+
+  getAdminTasks: (token: string, status?: string) => {
+    const qs = status ? `?status=${status}` : ''
+    return authFetch<StaffTask[]>(`/admin/tasks${qs}`, token)
+  },
+
+  createAdminTask: (token: string, data: {
+    title: string; description?: string; assigned_to?: number; service_request_id?: number
+    priority?: string; due_date?: string
+  }) => postAuthApi<StaffTask>('/admin/tasks', data, token),
+
+  updateAdminTask: (token: string, id: number, data: Partial<{
+    title: string; description: string; assigned_to: number | null; status: string; priority: string; due_date: string
+  }>) => patchApi(`/admin/tasks/${id}`, data, token),
+
+  deleteAdminTask: (token: string, id: number) => deleteApi(`/admin/tasks/${id}`, token),
 
   downloadAdminPdf: async (token: string, id: number, filename: string) => {
     try {

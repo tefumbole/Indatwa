@@ -69,9 +69,10 @@ class MessageTemplates
     public static function requestReceivedAdmin(ServiceRequest $request, string $reviewUrl): string
     {
         $services = $request->items->pluck('service_name')->join(', ');
+        $loginUrl = config('app.frontend_url').'/login';
 
         return implode("\n", array_filter([
-            '*New Service Request*',
+            '*New Service Request — Action Required*',
             '',
             "Ref: *{$request->reference_number}*",
             "Client: {$request->client_name}",
@@ -81,9 +82,10 @@ class MessageTemplates
             "Services: {$services}",
             $request->venue ? "Venue: {$request->venue}" : null,
             '',
-            "Review: {$reviewUrl}",
+            "Login: {$loginUrl}",
+            "Review / Approve / Deny: {$reviewUrl}",
             '',
-            'PDF attached.',
+            config('wasender.company_name'),
         ], fn ($line) => $line !== null));
     }
 
