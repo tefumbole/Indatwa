@@ -87,6 +87,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/staff', [AdminRequestController::class, 'staff']);
         Route::get('/requests', [AdminRequestController::class, 'index']);
         Route::post('/requests', [AdminRequestController::class, 'store']);
+        Route::delete('/requests/bulk', [AdminRequestController::class, 'bulkDestroy']);
         Route::get('/requests/{id}', [AdminRequestController::class, 'show']);
         Route::get('/requests/{id}/pdf', [AdminRequestController::class, 'downloadPdf']);
         Route::patch('/requests/{id}/status', [AdminRequestController::class, 'updateStatus']);

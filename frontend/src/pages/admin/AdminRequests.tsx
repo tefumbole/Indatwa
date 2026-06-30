@@ -4,7 +4,7 @@ import { Seo } from '@/components/shared/Seo'
 import { useAuth } from '@/context/AuthContext'
 import { api, type AdminRequestSummary, type Service } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { Loader2, Plus, Search, X } from 'lucide-react'
+import { Loader2, Plus, Search, Trash2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -28,6 +28,8 @@ export function AdminRequests() {
   const [showCreate, setShowCreate] = useState(false)
   const [services, setServices] = useState<Service[]>([])
   const [creating, setCreating] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [deleting, setDeleting] = useState(false)
   const [form, setForm] = useState({
     services: [] as number[],
     client_name: '',
@@ -51,6 +53,8 @@ export function AdminRequests() {
 
   useEffect(load, [token, tab])
 
+  useEffect(() => setSelectedIds([]), [tab, search])
+
   useEffect(() => {
     if (showCreate && token) {
       api.getServices().then((d) => { if (d) setServices(d) })
@@ -62,6 +66,30 @@ export function AdminRequests() {
       ...f,
       services: f.services.includes(id) ? f.services.filter((s) => s !== id) : [...f.services, id],
     }))
+  }
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === requests.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(requests.map((r) => r.id))
+    }
+  }
+
+  const deleteSelected = async () => {
+    if (!token || !selectedIds.length) return
+    if (!window.confirm(`Delete ${selectedIds.length} request(s)? This cannot be undone.`)) return
+    setDeleting(true)
+    const result = await api.deleteAdminRequests(token, selectedIds)
+    setDeleting(false)
+    if (result?.success) {
+      setSelectedIds([])
+      load()
+    }
   }
 
   const createRequest = async () => {
@@ -132,6 +160,18 @@ export function AdminRequests() {
             />
           </div>
           <Button size="sm" onClick={load}>Search</Button>
+          {selectedIds.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={deleteSelected}
+              disabled={deleting}
+              className="gap-1 text-red-700 border-red-300 hover:bg-red-50"
+            >
+              <Trash2 size={14} />
+              {deleting ? 'Deleting...' : `Delete Selected (${selectedIds.length})`}
+            </Button>
+          )}
         </div>
 
         {loading ? (
@@ -141,6 +181,15 @@ export function AdminRequests() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 dark:bg-slate-800/50 text-left">
                 <tr>
+                  <th className="px-4 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 text-ips-blue focus:ring-ips-blue"
+                      checked={requests.length > 0 && selectedIds.length === requests.length}
+                      onChange={toggleSelectAll}
+                      aria-label="Select all requests"
+                    />
+                  </th>
                   <th className="px-4 py-3 font-medium">Reference</th>
                   <th className="px-4 py-3 font-medium hidden sm:table-cell">Client</th>
                   <th className="px-4 py-3 font-medium hidden md:table-cell">Event</th>
@@ -151,7 +200,16 @@ export function AdminRequests() {
               </thead>
               <tbody>
                 {requests.length ? requests.map((req) => (
-                  <tr key={req.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                  <tr key={req.id} className={cn('border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30', selectedIds.includes(req.id) && 'bg-ips-blue/5')}>
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        className="rounded border-slate-300 text-ips-blue focus:ring-ips-blue"
+                        checked={selectedIds.includes(req.id)}
+                        onChange={() => toggleSelect(req.id)}
+                        aria-label={`Select ${req.reference_number}`}
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <Link to={`/admin/requests/${req.id}`} className="font-mono font-bold text-ips-blue hover:underline">
                         {req.reference_number}
@@ -172,7 +230,7 @@ export function AdminRequests() {
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400">No requests in this tab.</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-400">No requests in this tab.</td></tr>
                 )}
               </tbody>
             </table>

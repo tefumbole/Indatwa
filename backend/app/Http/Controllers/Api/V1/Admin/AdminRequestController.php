@@ -333,6 +333,29 @@ class AdminRequestController extends Controller
         ]);
     }
 
+    public function bulkDestroy(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:service_requests,id',
+        ]);
+
+        $requests = ServiceRequest::whereIn('id', $validated['ids'])->get();
+
+        foreach ($requests as $serviceRequest) {
+            if ($serviceRequest->pdf_path && Storage::disk('public')->exists($serviceRequest->pdf_path)) {
+                Storage::disk('public')->delete($serviceRequest->pdf_path);
+            }
+        }
+
+        $deleted = ServiceRequest::whereIn('id', $validated['ids'])->delete();
+
+        return response()->json([
+            'success' => true,
+            'data' => ['deleted' => $deleted],
+        ]);
+    }
+
     public function setQuotation(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([

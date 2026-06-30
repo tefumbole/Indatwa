@@ -797,6 +797,13 @@ export const api = {
       body: JSON.stringify({ item_ids }),
     }).then((r) => r.json()),
 
+  deleteAdminRequests: (token: string, ids: number[]) =>
+    fetch(`${API_BASE}/admin/requests/bulk`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ids }),
+    }).then((r) => r.json()),
+
   setAdminQuotation: (token: string, id: number, data: {
     quoted_amount?: number
     miscellaneous_amount?: number
