@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
 import { api, type AdminRequestDetail, type StaffMember } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { ArrowLeft, CheckCircle, Download, Loader2, Save } from 'lucide-react'
+import { ArrowLeft, CheckCircle, Download, Loader2, Save, XCircle } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -13,6 +13,12 @@ const STATUSES = [
 
 const adminSelectClass = 'px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm flex-1 min-w-[160px] outline-none focus:ring-2 focus:ring-ips-blue/20'
 const adminInputClass = 'px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm flex-1 min-w-[160px] outline-none focus:ring-2 focus:ring-ips-blue/20'
+
+const serviceStatusStyles: Record<string, string> = {
+  approved: 'bg-green-100 text-green-800 border-green-200',
+  rejected: 'bg-red-100 text-red-800 border-red-200',
+  pending: 'bg-amber-100 text-amber-900 border-amber-200',
+}
 
 export function AdminRequestDetail() {
   const { id } = useParams<{ id: string }>()
@@ -26,6 +32,7 @@ export function AdminRequestDetail() {
   const [assignId, setAssignId] = useState<string>('')
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [quotationNotes, setQuotationNotes] = useState('')
   const [itemPrices, setItemPrices] = useState<Record<number, string>>({})
   const [scheduleUserIds, setScheduleUserIds] = useState<number[]>([])
@@ -62,10 +69,25 @@ export function AdminRequestDetail() {
 
   useEffect(load, [token, id])
 
+  useEffect(() => {
+    if (!actionFeedback) return
+    const timer = window.setTimeout(() => setActionFeedback(null), 5000)
+    return () => window.clearTimeout(timer)
+  }, [actionFeedback])
+
   const approvedServices = useMemo(
     () => data?.services.filter((s) => s.status === 'approved') ?? [],
     [data]
   )
+
+  const serviceCounts = useMemo(() => {
+    if (!data) return { approved: 0, rejected: 0, pending: 0 }
+    return {
+      approved: data.services.filter((s) => s.status === 'approved').length,
+      rejected: data.services.filter((s) => s.status === 'rejected').length,
+      pending: data.services.filter((s) => s.status === 'pending').length,
+    }
+  }, [data])
 
   const computedTotal = useMemo(() => {
     return approvedServices.reduce((sum, s) => {
@@ -81,6 +103,7 @@ export function AdminRequestDetail() {
     setSaving(true)
     await api.updateAdminRequestStatus(token, Number(id), status, statusNote)
     setStatusNote('')
+    setActionFeedback({ type: 'success', text: 'Request status updated.' })
     setSaving(false)
     load()
   }
@@ -89,6 +112,7 @@ export function AdminRequestDetail() {
     if (!token || !id) return
     setSaving(true)
     await api.updateAdminNotes(token, Number(id), notes)
+    setActionFeedback({ type: 'success', text: 'Internal notes saved.' })
     setSaving(false)
   }
 
@@ -96,28 +120,44 @@ export function AdminRequestDetail() {
     if (!token || !id) return
     setSaving(true)
     await api.assignAdminRequest(token, Number(id), assignId ? Number(assignId) : null)
+    setActionFeedback({ type: 'success', text: 'Assignment updated.' })
     setSaving(false)
     load()
   }
 
-  const reviewItem = async (itemId: number, itemStatus: string) => {
+  const reviewItem = async (itemId: number, itemStatus: string, serviceName: string) => {
     if (!token || !id) return
+    setSaving(true)
     const comment = window.prompt('Comment (optional):') || undefined
     const quoted_price = itemPrices[itemId] ? Number(itemPrices[itemId]) : undefined
-    await api.updateAdminRequestItem(token, Number(id), itemId, {
+    const result = await api.updateAdminRequestItem(token, Number(id), itemId, {
       status: itemStatus,
       admin_comment: comment,
       quoted_price,
     })
-    load()
+    setSaving(false)
+    if (result?.success) {
+      setActionFeedback({
+        type: 'success',
+        text: `"${serviceName}" marked as ${itemStatus}.`,
+      })
+      load()
+    } else {
+      setActionFeedback({ type: 'error', text: `Could not update "${serviceName}". Try again.` })
+    }
   }
 
   const acceptAll = async () => {
     if (!token || !id) return
     setSaving(true)
-    await api.acceptAllAdminServices(token, Number(id))
+    const result = await api.acceptAllAdminServices(token, Number(id))
     setSaving(false)
-    load()
+    if (result?.success) {
+      setActionFeedback({ type: 'success', text: 'All pending services approved.' })
+      load()
+    } else {
+      setActionFeedback({ type: 'error', text: 'Could not approve all services.' })
+    }
   }
 
   const sendMessage = async () => {
@@ -140,6 +180,7 @@ export function AdminRequestDetail() {
         quoted_price: Number(itemPrices[s.id] || 0),
       })),
     })
+    setActionFeedback({ type: 'success', text: 'Quotation sent to client.' })
     setSaving(false)
     load()
   }
@@ -155,6 +196,7 @@ export function AdminRequestDetail() {
       end_time: endTime || undefined,
       notes: scheduleNotes || undefined,
     })
+    setActionFeedback({ type: 'success', text: 'Schedule assigned.' })
     setSaving(false)
     load()
   }
@@ -170,25 +212,36 @@ export function AdminRequestDetail() {
   }
 
   if (!data) {
-    return <p>Request not found.</p>
+    return <p className="text-slate-700">Request not found.</p>
   }
 
   const hasPending = data.services.some((s) => s.status === 'pending')
 
   return (
     <div className="max-w-4xl mx-auto">
-      <Link to="/admin/requests" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-ips-blue mb-6">
+      <Link to="/admin/requests" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-ips-blue mb-6">
         <ArrowLeft size={16} /> Back to requests
       </Link>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-100 dark:border-slate-800 mb-6">
+      {actionFeedback && (
+        <div className={cn(
+          'mb-4 px-4 py-3 rounded-lg text-sm font-medium border',
+          actionFeedback.type === 'success'
+            ? 'bg-green-50 text-green-800 border-green-200'
+            : 'bg-red-50 text-red-800 border-red-200'
+        )}>
+          {actionFeedback.text}
+        </div>
+      )}
+
+      <div className="admin-card rounded-xl p-6 mb-6">
         <div className="flex flex-wrap justify-between gap-4 mb-4">
           <div>
             <p className="font-mono font-bold text-lg text-ips-blue">{data.reference_number}</p>
-            <h1 className="font-display text-xl font-bold">{data.event_title}</h1>
-            <p className="text-sm text-slate-500">{data.client_name} — {data.client_phone}</p>
+            <h1 className="font-display text-xl font-bold text-slate-900">{data.event_title}</h1>
+            <p className="text-sm text-slate-600">{data.client_name} — {data.client_phone}</p>
             {isConfirmed && (
-              <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+              <p className="text-xs text-green-700 mt-1 flex items-center gap-1">
                 <CheckCircle size={14} /> Client confirmed {new Date(data.client_signed_at!).toLocaleString()}
               </p>
             )}
@@ -198,12 +251,12 @@ export function AdminRequestDetail() {
           </Button>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-4 text-sm mb-6">
-          <div><span className="text-slate-500">Event date:</span> {new Date(data.event_date).toLocaleDateString()}</div>
-          <div><span className="text-slate-500">Type:</span> {data.event_type}</div>
-          {data.venue && <div><span className="text-slate-500">Venue:</span> {data.venue}</div>}
-          {data.client_email && <div><span className="text-slate-500">Email:</span> {data.client_email}</div>}
-          {data.event_description && <div className="sm:col-span-2"><span className="text-slate-500">Description:</span> {data.event_description}</div>}
+        <div className="grid sm:grid-cols-2 gap-4 text-sm mb-6 text-slate-800">
+          <div><span className="text-slate-600 font-medium">Event date:</span> {new Date(data.event_date).toLocaleDateString()}</div>
+          <div><span className="text-slate-600 font-medium">Type:</span> {data.event_type}</div>
+          {data.venue && <div><span className="text-slate-600 font-medium">Venue:</span> {data.venue}</div>}
+          {data.client_email && <div><span className="text-slate-600 font-medium">Email:</span> {data.client_email}</div>}
+          {data.event_description && <div className="sm:col-span-2"><span className="text-slate-600 font-medium">Description:</span> {data.event_description}</div>}
         </div>
 
         <div className="flex flex-wrap gap-2 mb-4">
@@ -219,7 +272,7 @@ export function AdminRequestDetail() {
           <Button size="sm" onClick={saveStatus} disabled={saving}>Update Status</Button>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 mb-2">
           <select className={adminSelectClass} value={assignId} onChange={(e) => setAssignId(e.target.value)}>
             <option value="">Unassigned</option>
             {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -228,25 +281,38 @@ export function AdminRequestDetail() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border mb-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h3 className="font-semibold">Services</h3>
+      <div className="admin-card rounded-xl p-6 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="font-semibold text-slate-900 text-lg">Services</h3>
+            <p className="text-xs text-slate-600 mt-1">
+              {serviceCounts.approved} approved · {serviceCounts.pending} pending · {serviceCounts.rejected} rejected
+            </p>
+          </div>
           {hasPending && (
             <Button size="sm" variant="outline" onClick={acceptAll} disabled={saving}>
               Accept All Pending
             </Button>
           )}
         </div>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {data.services.map((s) => (
-            <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-sm">
-              <div className="flex-1 min-w-[140px]">
-                <p className="font-medium">{s.name}</p>
-                {s.admin_comment && <p className="text-xs text-slate-500">{s.admin_comment}</p>}
+            <div
+              key={s.id}
+              className={cn(
+                'flex flex-wrap items-center justify-between gap-3 p-4 rounded-lg border text-sm bg-white',
+                s.status === 'approved' && 'border-green-200 bg-green-50/40',
+                s.status === 'rejected' && 'border-red-200 bg-red-50/40',
+                s.status === 'pending' && 'border-amber-200 bg-amber-50/30',
+              )}
+            >
+              <div className="flex-1 min-w-[180px]">
+                <p className="font-semibold text-slate-900 text-base">{s.name}</p>
+                {s.admin_comment && <p className="text-xs text-slate-600 mt-1">{s.admin_comment}</p>}
               </div>
               {s.status === 'approved' && (
                 <input
-                  className="w-28 px-2 py-1.5 rounded border text-sm"
+                  className="w-32 px-2 py-1.5 rounded border border-slate-200 bg-white text-slate-900 text-sm"
                   type="number"
                   min={0}
                   placeholder="Price RWF"
@@ -254,12 +320,19 @@ export function AdminRequestDetail() {
                   onChange={(e) => setItemPrices({ ...itemPrices, [s.id]: e.target.value })}
                 />
               )}
-              <div className="flex gap-2 items-center">
-                <span className={cn('text-xs px-2 py-1 rounded capitalize', s.status === 'approved' ? 'bg-green-100 text-green-700' : s.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}>{s.status}</span>
+              <div className="flex gap-2 items-center flex-wrap">
+                <span className={cn(
+                  'inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border capitalize',
+                  serviceStatusStyles[s.status] ?? serviceStatusStyles.pending
+                )}>
+                  {s.status === 'approved' && <CheckCircle size={12} />}
+                  {s.status === 'rejected' && <XCircle size={12} />}
+                  {s.status}
+                </span>
                 {s.status === 'pending' && (
                   <>
-                    <Button size="sm" variant="outline" onClick={() => reviewItem(s.id, 'approved')}>Approve</Button>
-                    <Button size="sm" variant="outline" onClick={() => reviewItem(s.id, 'rejected')}>Reject</Button>
+                    <Button size="sm" variant="outline" disabled={saving} onClick={() => reviewItem(s.id, 'approved', s.name)}>Approve</Button>
+                    <Button size="sm" variant="outline" disabled={saving} onClick={() => reviewItem(s.id, 'rejected', s.name)}>Reject</Button>
                   </>
                 )}
               </div>
@@ -269,15 +342,15 @@ export function AdminRequestDetail() {
       </div>
 
       {approvedServices.length > 0 && !isConfirmed && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border mb-6">
-          <h3 className="font-semibold mb-3">Quotation & Invoice</h3>
-          <p className="text-xs text-slate-500 mb-3">Set a price per approved service, then send the quotation to the client for signature.</p>
-          <div className="flex items-center justify-between text-sm mb-3 p-3 rounded-lg bg-ips-blue/5">
-            <span className="font-medium">Total</span>
+        <div className="admin-card rounded-xl p-6 mb-6">
+          <h3 className="font-semibold text-slate-900 mb-3">Quotation & Invoice</h3>
+          <p className="text-xs text-slate-600 mb-3">Set a price per approved service, then send the quotation to the client for signature.</p>
+          <div className="flex items-center justify-between text-sm mb-3 p-3 rounded-lg bg-ips-blue/5 border border-ips-blue/10">
+            <span className="font-medium text-slate-800">Total</span>
             <span className="font-bold text-ips-blue">{computedTotal.toLocaleString()} RWF</span>
           </div>
           <textarea
-            className="w-full px-3 py-2 rounded-lg border text-sm min-h-[80px] mb-3"
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm min-h-[80px] mb-3"
             placeholder="Quotation notes"
             value={quotationNotes}
             onChange={(e) => setQuotationNotes(e.target.value)}
@@ -287,7 +360,7 @@ export function AdminRequestDetail() {
               Send to Client for Signature
             </Button>
             {data.sent_for_signature_at && (
-              <span className="text-xs text-slate-500 self-center">
+              <span className="text-xs text-slate-600 self-center">
                 Sent {new Date(data.sent_for_signature_at).toLocaleString()}
               </span>
             )}
@@ -296,15 +369,15 @@ export function AdminRequestDetail() {
       )}
 
       {isConfirmed && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border mb-6">
-          <h3 className="font-semibold mb-3">Schedule Assignment</h3>
-          <p className="text-xs text-slate-500 mb-3">Assign staff and date/time range. Booked dates appear on the Booking Calendar.</p>
+        <div className="admin-card rounded-xl p-6 mb-6">
+          <h3 className="font-semibold text-slate-900 mb-3">Schedule Assignment</h3>
+          <p className="text-xs text-slate-600 mb-3">Assign staff and date/time range. Booked dates appear on the Booking Calendar.</p>
           <div className="space-y-3 mb-4">
             <div className="flex flex-wrap gap-2">
               {staff.map((s) => (
                 <label key={s.id} className={cn(
                   'text-xs px-3 py-1.5 rounded-full border cursor-pointer',
-                  scheduleUserIds.includes(s.id) ? 'bg-ips-gold text-ips-blue border-ips-gold' : 'border-slate-200'
+                  scheduleUserIds.includes(s.id) ? 'bg-ips-gold text-ips-blue border-ips-gold' : 'border-slate-200 bg-white text-slate-800'
                 )}>
                   <input type="checkbox" className="sr-only" checked={scheduleUserIds.includes(s.id)} onChange={() => toggleScheduleUser(s.id)} />
                   {s.name}
@@ -312,12 +385,12 @@ export function AdminRequestDetail() {
               ))}
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
-              <input className="px-3 py-2 rounded-lg border text-sm" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              <input className="px-3 py-2 rounded-lg border text-sm" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="End date" />
-              <input className="px-3 py-2 rounded-lg border text-sm" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-              <input className="px-3 py-2 rounded-lg border text-sm" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <input className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <input className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="End date" />
+              <input className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <input className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
             </div>
-            <textarea className="w-full px-3 py-2 rounded-lg border text-sm min-h-[60px]" placeholder="Assignment notes" value={scheduleNotes} onChange={(e) => setScheduleNotes(e.target.value)} />
+            <textarea className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm min-h-[60px]" placeholder="Assignment notes" value={scheduleNotes} onChange={(e) => setScheduleNotes(e.target.value)} />
           </div>
           <Button size="sm" onClick={saveSchedule} disabled={saving || !scheduleUserIds.length || !startDate}>
             Assign Schedule
@@ -325,9 +398,9 @@ export function AdminRequestDetail() {
 
           {data.assignments && data.assignments.length > 0 && (
             <div className="mt-4 space-y-2">
-              <p className="text-xs font-medium text-slate-500 uppercase">Previous assignments</p>
+              <p className="text-xs font-medium text-slate-600 uppercase">Previous assignments</p>
               {data.assignments.map((a) => (
-                <div key={a.id} className="text-sm p-2 rounded bg-slate-50 dark:bg-slate-800/50">
+                <div key={a.id} className="text-sm p-2 rounded bg-slate-50 border border-slate-100 text-slate-800">
                   {a.start_date}{a.end_date && a.end_date !== a.start_date ? ` — ${a.end_date}` : ''}
                   {a.start_time && ` · ${a.start_time}`}{a.end_time && `–${a.end_time}`}
                 </div>
@@ -337,10 +410,10 @@ export function AdminRequestDetail() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border mb-6">
-        <h3 className="font-semibold mb-3">Internal Notes</h3>
+      <div className="admin-card rounded-xl p-6 mb-6">
+        <h3 className="font-semibold text-slate-900 mb-3">Internal Notes</h3>
         <textarea
-          className="w-full px-3 py-2 rounded-lg border text-sm min-h-[100px] mb-2"
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm min-h-[100px] mb-2"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
@@ -348,32 +421,32 @@ export function AdminRequestDetail() {
       </div>
 
       {data.status_history?.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border mb-6">
-          <h3 className="font-semibold mb-3">Status Timeline</h3>
+        <div className="admin-card rounded-xl p-6 mb-6">
+          <h3 className="font-semibold text-slate-900 mb-3">Status Timeline</h3>
           <div className="space-y-2">
             {data.status_history.map((h, i) => (
-              <div key={i} className="text-sm p-2 rounded bg-slate-50 dark:bg-slate-800/50">
+              <div key={i} className="text-sm p-2 rounded bg-slate-50 border border-slate-100 text-slate-800">
                 <span className="font-medium capitalize">{h.to_status.replace(/_/g, ' ')}</span>
-                <span className="text-xs text-slate-400 ml-2">{new Date(h.created_at).toLocaleString()}</span>
-                {h.note && <p className="text-xs text-slate-500 mt-1">{h.note}</p>}
+                <span className="text-xs text-slate-500 ml-2">{new Date(h.created_at).toLocaleString()}</span>
+                {h.note && <p className="text-xs text-slate-600 mt-1">{h.note}</p>}
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border">
-        <h3 className="font-semibold mb-3">Messages</h3>
+      <div className="admin-card rounded-xl p-6">
+        <h3 className="font-semibold text-slate-900 mb-3">Messages</h3>
         <div className="space-y-2 max-h-48 overflow-y-auto mb-3">
           {data.messages?.map((m) => (
-            <div key={m.id} className={cn('p-2 rounded text-sm', m.is_internal ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-slate-50 dark:bg-slate-800/50')}>
-              <p className="text-xs text-slate-500">{m.sender.name} {m.is_internal && '(internal)'}</p>
+            <div key={m.id} className={cn('p-2 rounded text-sm border', m.is_internal ? 'bg-amber-50 border-amber-100 text-slate-800' : 'bg-slate-50 border-slate-100 text-slate-800')}>
+              <p className="text-xs text-slate-600">{m.sender.name} {m.is_internal && '(internal)'}</p>
               <p>{m.message}</p>
             </div>
           ))}
         </div>
         <div className="flex gap-2">
-          <input className="flex-1 px-3 py-2 rounded-lg border text-sm" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Internal note to team..." />
+          <input className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Internal note to team..." />
           <Button size="sm" onClick={sendMessage}>Send</Button>
         </div>
       </div>

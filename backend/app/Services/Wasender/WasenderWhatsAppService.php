@@ -56,38 +56,73 @@ class WasenderWhatsAppService
         return $this->request('post', '/send-message', $payload, $to, 'document');
     }
 
-    public function uploadBuffer(string $buffer, string $mimeType = 'application/pdf'): array
+    public function uploadBuffer(string $buffer, string $mimeType = 'application/pdf', ?string $fileName = null): array
     {
         if (! $this->isConfigured()) {
             return ['success' => false, 'error' => 'WasenderAPI not configured', 'public_url' => null];
         }
 
+        $uploadUrl = rtrim(config('wasender.base_url'), '/').'/upload';
+        $fileName = $fileName ?: 'document.pdf';
+
         try {
             $response = Http::withToken(config('wasender.api_key'))
+                ->timeout(120)
                 ->withHeaders(['Content-Type' => $mimeType])
                 ->withBody($buffer, $mimeType)
-                ->post(rtrim(config('wasender.base_url'), '/').'/upload');
+                ->post($uploadUrl);
 
             $data = $response->json();
+            $publicUrl = $this->extractPublicUrl($data);
 
-            if ($response->successful() && ($data['success'] ?? false)) {
-                return [
-                    'success' => true,
-                    'public_url' => $data['publicUrl'] ?? $data['data']['publicUrl'] ?? $data['public_url'] ?? null,
-                    'error' => null,
-                ];
+            if ($response->successful() && ($data['success'] ?? false) && $publicUrl) {
+                return ['success' => true, 'public_url' => $publicUrl, 'error' => null];
             }
+
+            // Multipart fallback (some Wasender setups expect a file field)
+            $multipartResponse = Http::withToken(config('wasender.api_key'))
+                ->timeout(120)
+                ->attach('file', $buffer, $fileName, ['Content-Type' => $mimeType])
+                ->post($uploadUrl);
+
+            $multipartData = $multipartResponse->json();
+            $multipartUrl = $this->extractPublicUrl($multipartData);
+
+            if ($multipartResponse->successful() && ($multipartData['success'] ?? false) && $multipartUrl) {
+                return ['success' => true, 'public_url' => $multipartUrl, 'error' => null];
+            }
+
+            Log::error('Wasender upload failed', [
+                'raw_status' => $response->status(),
+                'raw_body' => mb_substr($response->body(), 0, 500),
+                'multipart_status' => $multipartResponse->status(),
+                'multipart_body' => mb_substr($multipartResponse->body(), 0, 500),
+            ]);
 
             return [
                 'success' => false,
                 'public_url' => null,
-                'error' => $data['message'] ?? $response->body(),
+                'error' => $multipartData['message'] ?? $data['message'] ?? $response->body(),
             ];
         } catch (\Throwable $e) {
-            Log::error('Wasender upload failed', ['error' => $e->getMessage()]);
+            Log::error('Wasender upload exception', ['error' => $e->getMessage()]);
 
             return ['success' => false, 'public_url' => null, 'error' => $e->getMessage()];
         }
+    }
+
+    private function extractPublicUrl(?array $data): ?string
+    {
+        if (! $data) {
+            return null;
+        }
+
+        return $data['publicUrl']
+            ?? ($data['data']['publicUrl'] ?? null)
+            ?? $data['public_url']
+            ?? ($data['data']['public_url'] ?? null)
+            ?? $data['url']
+            ?? null;
     }
 
     private function request(string $method, string $path, array $payload, string $phone, string $messageType): array

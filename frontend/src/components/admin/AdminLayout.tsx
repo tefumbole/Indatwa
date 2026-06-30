@@ -1,7 +1,7 @@
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
 import {
-  CalendarDays, CheckSquare, ClipboardList, LayoutDashboard, LogOut, Megaphone, Menu, Settings, Shield, Users, X,
+  CalendarDays, CheckSquare, ClipboardList, LayoutDashboard, LogOut, Megaphone, Menu, Shield, Users, X,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
@@ -32,7 +32,6 @@ const NAV_GROUPS = [
     items: [
       { label: 'Manage Users', href: '/admin/users', icon: Users },
       { label: 'Roles & Permissions', href: '/admin/roles', icon: Shield },
-      { label: 'Settings', href: '/admin', icon: Settings },
     ],
   },
 ]
@@ -53,21 +52,21 @@ export function AdminLayout() {
   return (
     <div className="admin-console min-h-screen bg-slate-100 flex">
       <aside className={cn(
-        'fixed lg:static inset-y-0 left-0 z-40 w-72 bg-ips-blue text-white flex flex-col transition-transform lg:translate-x-0 shadow-xl',
+        'admin-sidebar fixed lg:static inset-y-0 left-0 z-40 w-72 bg-[#0a2560] text-white flex flex-col transition-transform lg:translate-x-0 shadow-xl',
         open ? 'translate-x-0' : '-translate-x-full'
       )}>
-        <div className="p-6 border-b border-white/10">
+        <div className="p-6 border-b border-white/15">
           <Link to="/admin" className="block" onClick={() => setOpen(false)}>
-            <p className="text-ips-gold font-bold text-lg leading-tight">Indatwa</p>
-            <p className="text-white font-semibold text-sm tracking-wide">PROTOCOL & SERVICES</p>
-            <p className="text-[10px] text-white/50 mt-1 uppercase tracking-widest">Admin Console</p>
+            <p className="text-ips-gold font-bold text-xl leading-tight">Indatwa</p>
+            <p className="text-white font-bold text-sm tracking-wide mt-0.5">PROTOCOL & SERVICES</p>
+            <p className="text-[10px] text-white/60 mt-1 uppercase tracking-widest">Admin Console</p>
           </Link>
         </div>
 
-        <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-5 overflow-y-auto">
           {NAV_GROUPS.map((group) => (
             <div key={group.label}>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 px-3 mb-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-white/50 px-3 mb-2">
                 {group.label}
               </p>
               <div className="space-y-1">
@@ -79,13 +78,13 @@ export function AdminLayout() {
                       to={item.href}
                       onClick={() => setOpen(false)}
                       className={cn(
-                        'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all',
+                        'admin-nav-link flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all',
                         active
-                          ? 'bg-ips-gold text-ips-blue shadow-lg shadow-black/10'
-                          : 'text-white/75 hover:bg-white/10 hover:text-white'
+                          ? 'bg-ips-gold text-[#0a2560] shadow-md'
+                          : 'text-white hover:bg-white/15'
                       )}
                     >
-                      <item.icon size={18} />
+                      <item.icon size={18} strokeWidth={active ? 2.5 : 2} />
                       {item.label}
                     </Link>
                   )
@@ -95,19 +94,21 @@ export function AdminLayout() {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-white/10">
+        <div className="p-4 border-t border-white/15">
           <div className="flex items-center gap-3 px-2 mb-3">
-            <div className="w-10 h-10 rounded-full bg-ips-gold text-ips-blue flex items-center justify-center font-bold text-sm">
+            <div className="w-10 h-10 rounded-full bg-ips-gold text-[#0a2560] flex items-center justify-center font-bold text-sm shrink-0">
               {initials}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold truncate">{user?.name}</p>
-              <p className="text-[10px] text-ips-gold capitalize">{primaryRole}</p>
+              <p className="text-sm font-medium text-white truncate">{user?.name}</p>
+              <span className="inline-block mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/90 text-white capitalize">
+                {primaryRole}
+              </span>
             </div>
           </div>
           <button
             onClick={logout}
-            className="flex items-center gap-2 text-sm text-white/70 hover:text-white w-full px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
+            className="admin-nav-link flex items-center gap-2 text-sm text-white/80 hover:text-white w-full px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
           >
             <LogOut size={16} /> Sign Out
           </button>

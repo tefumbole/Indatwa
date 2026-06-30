@@ -6,4 +6,5 @@ return [
     'company_location' => 'Kimironko, Kigali, Rwanda',
     'reference_prefix' => 'IPS',
     'otp_login_enabled' => env('OTP_LOGIN_ENABLED', false),
+    'public_web_root' => env('PUBLIC_WEB_ROOT'),
 ];

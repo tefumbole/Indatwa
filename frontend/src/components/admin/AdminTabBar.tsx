@@ -8,17 +8,19 @@ export interface AdminTab {
   icon?: LucideIcon
   active?: boolean
   onClick?: () => void
-  color?: 'blue' | 'gold' | 'purple' | 'green' | 'orange' | 'pink' | 'teal'
+  color?: 'blue' | 'gold' | 'purple' | 'green' | 'orange' | 'pink' | 'teal' | 'red' | 'lime'
 }
 
 const OUTLINE_COLORS: Record<string, string> = {
-  gold: 'border-ips-gold text-ips-gold-dark hover:bg-ips-gold/10',
-  purple: 'border-purple-500 text-purple-600 hover:bg-purple-50',
-  green: 'border-emerald-500 text-emerald-600 hover:bg-emerald-50',
-  orange: 'border-orange-500 text-orange-600 hover:bg-orange-50',
-  pink: 'border-pink-500 text-pink-600 hover:bg-pink-50',
-  teal: 'border-teal-500 text-teal-600 hover:bg-teal-50',
-  blue: 'border-ips-blue text-ips-blue hover:bg-ips-blue/5',
+  gold: 'border-amber-400 text-amber-800 bg-white hover:bg-amber-50',
+  purple: 'border-purple-500 text-purple-700 bg-white hover:bg-purple-50',
+  green: 'border-emerald-500 text-emerald-700 bg-white hover:bg-emerald-50',
+  orange: 'border-orange-500 text-orange-700 bg-white hover:bg-orange-50',
+  pink: 'border-pink-500 text-pink-700 bg-white hover:bg-pink-50',
+  teal: 'border-teal-500 text-teal-700 bg-white hover:bg-teal-50',
+  blue: 'border-ips-blue text-ips-blue bg-white hover:bg-blue-50',
+  red: 'border-red-500 text-red-700 bg-white hover:bg-red-50',
+  lime: 'border-lime-500 text-lime-800 bg-white hover:bg-lime-50',
 }
 
 interface AdminTabBarProps {
@@ -31,22 +33,22 @@ export function AdminTabBar({ section, tabs, className }: AdminTabBarProps) {
   return (
     <div className={cn('mb-6', className)}>
       {section && (
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-3">{section}</p>
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">{section}</p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2.5">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const base = cn(
-            'inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all',
+            'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all border-2 shadow-sm',
             tab.active
-              ? 'bg-ips-blue text-white shadow-md shadow-ips-blue/20'
-              : cn('bg-white border-2', OUTLINE_COLORS[tab.color ?? 'gold'])
+              ? 'bg-ips-blue text-white border-ips-blue shadow-md shadow-ips-blue/25'
+              : OUTLINE_COLORS[tab.color ?? 'gold']
           )
 
           if (tab.href) {
             return (
               <Link key={tab.label} to={tab.href} className={base}>
-                {Icon && <Icon size={16} />}
+                {Icon && <Icon size={17} strokeWidth={2.5} />}
                 {tab.label}
               </Link>
             )
@@ -54,7 +56,7 @@ export function AdminTabBar({ section, tabs, className }: AdminTabBarProps) {
 
           return (
             <button key={tab.label} type="button" onClick={tab.onClick} className={base}>
-              {Icon && <Icon size={16} />}
+              {Icon && <Icon size={17} strokeWidth={2.5} />}
               {tab.label}
             </button>
           )

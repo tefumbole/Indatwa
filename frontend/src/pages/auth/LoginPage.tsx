@@ -7,7 +7,7 @@ import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
-const inputClass = 'w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-ips-blue/30 outline-none text-sm'
+const inputClass = 'form-input'
 
 export function LoginPage() {
   const { login } = useAuth()
@@ -84,9 +84,9 @@ export function LoginPage() {
     <>
       <Seo title="Login" path="/login" />
       <div className="min-h-screen pt-28 pb-16 px-4 flex items-center justify-center">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full glass rounded-2xl p-8">
-          <h1 className="font-display text-2xl font-bold text-ips-blue dark:text-white mb-2">Login</h1>
-          <p className="text-slate-500 text-sm mb-6">Clients use phone; admins can use username <strong>admin</strong>.</p>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full bg-white rounded-2xl p-8 shadow-xl border border-slate-200">
+          <h1 className="font-display text-2xl font-bold text-ips-blue mb-2">Login</h1>
+          <p className="text-slate-600 text-sm mb-6">Clients use phone; admins can use username <strong className="text-slate-800">admin</strong>.</p>
 
           <form onSubmit={handlePasswordLogin} className="space-y-4">
             <input className={inputClass} value={loginId} onChange={(e) => setLoginId(e.target.value)} placeholder="Username, email or phone" required />

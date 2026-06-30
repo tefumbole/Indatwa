@@ -27,6 +27,8 @@ php artisan route:cache
 # curl -s "https://indatwagency.com/api/v1/cron/announcements?token=YOUR_CRON_SECRET"
 
 mkdir -p "${PUBLIC_HTML}/build"
+mkdir -p "${PUBLIC_HTML}/media/requests"
+chmod 755 "${PUBLIC_HTML}/media" "${PUBLIC_HTML}/media/requests" 2>/dev/null || true
 cp "${REPO_DIR}/deploy/public_html/index.php" "${PUBLIC_HTML}/index.php"
 cp "${REPO_DIR}/deploy/public_html/.htaccess" "${PUBLIC_HTML}/.htaccess"
 

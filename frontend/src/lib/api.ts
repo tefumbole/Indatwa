@@ -1,7 +1,24 @@
 import type { RequestFormData } from '@/schemas/requestSchema'
 
-const API_BASE = import.meta.env.VITE_API_URL
-  || (typeof window !== 'undefined' ? `${window.location.origin}/api/v1` : 'http://localhost:8000/api/v1')
+/** Use same-origin API on production even if a dev URL was baked into the build. */
+function resolveApiBase(): string {
+  const envUrl = import.meta.env.VITE_API_URL as string | undefined
+  if (typeof window === 'undefined') {
+    return envUrl || 'http://localhost:8000/api/v1'
+  }
+
+  const host = window.location.hostname
+  const onLocalHost = host === 'localhost' || host === '127.0.0.1'
+  const envPointsToLocal = !envUrl || /localhost|127\.0\.0\.1/.test(envUrl)
+
+  if (!onLocalHost && envPointsToLocal) {
+    return `${window.location.origin}/api/v1`
+  }
+
+  return envUrl || `${window.location.origin}/api/v1`
+}
+
+const API_BASE = resolveApiBase()
 
 interface ApiResponse<T> {
   success: boolean

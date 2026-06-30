@@ -57,7 +57,7 @@ class AuthController extends Controller
 
         $this->linkRequestsByPhone($user);
 
-        $token = $user->createToken('client-portal')->plainTextToken;
+        $token = $user->createToken($this->tokenName($user))->plainTextToken;
 
         return response()->json([
             'success' => true,
@@ -174,7 +174,7 @@ class AuthController extends Controller
         $user->update(['phone_verified_at' => now(), 'last_login_at' => now()]);
         $this->linkRequestsByPhone($user);
 
-        $token = $user->createToken('client-portal-otp')->plainTextToken;
+        $token = $user->createToken($this->tokenName($user).'-otp')->plainTextToken;
 
         return response()->json([
             'success' => true,
@@ -206,7 +206,7 @@ class AuthController extends Controller
 
         Cache::forget("2fa:{$validated['temp_token']}");
         $user->update(['last_login_at' => now()]);
-        $token = $user->createToken('admin-portal')->plainTextToken;
+        $token = $user->createToken($this->tokenName($user).'-2fa')->plainTextToken;
 
         return response()->json([
             'success' => true,
@@ -282,7 +282,10 @@ class AuthController extends Controller
 
     private function tokenName(User $user): string
     {
-        return $user->hasRole('client') ? 'client-portal' : 'admin-portal';
+        $prefix = $user->hasRole('client') ? 'client-portal' : 'admin-portal';
+
+        // Unique name per login so multiple devices/sessions can stay signed in.
+        return $prefix.'-'.Str::random(10);
     }
 
     private function linkRequestsByPhone(User $user): void

@@ -124,7 +124,7 @@ export function AdminRequests() {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
-              className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm outline-none"
+              className="form-input pl-10"
               placeholder="Search reference, client, event..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -182,17 +182,17 @@ export function AdminRequests() {
 
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-slate-200">
             <div className="flex items-center justify-between p-5 border-b">
               <h2 className="font-bold text-lg text-ips-blue">Create Service Request</h2>
               <button onClick={() => setShowCreate(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <label className="text-xs font-medium text-slate-500 mb-2 block">Services *</label>
-                <div className="space-y-1 max-h-32 overflow-y-auto border rounded-lg p-2">
+                <label className="form-label">Services *</label>
+                <div className="space-y-1 max-h-32 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50">
                   {services.map((s) => (
-                    <label key={s.id} className="flex items-center gap-2 text-sm p-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                    <label key={s.id} className="flex items-center gap-2 text-sm text-slate-800 p-1.5 rounded hover:bg-white cursor-pointer">
                       <input type="checkbox" checked={form.services.includes(s.id)} onChange={() => toggleService(s.id)} />
                       {s.name}
                     </label>
@@ -200,16 +200,16 @@ export function AdminRequests() {
                 </div>
               </div>
               <div className="grid sm:grid-cols-2 gap-3">
-                <input className="px-3 py-2 rounded-lg border text-sm" placeholder="Client name *" value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} />
-                <input className="px-3 py-2 rounded-lg border text-sm" placeholder="Phone *" value={form.client_phone} onChange={(e) => setForm({ ...form, client_phone: e.target.value })} />
-                <input className="px-3 py-2 rounded-lg border text-sm sm:col-span-2" placeholder="Email" value={form.client_email} onChange={(e) => setForm({ ...form, client_email: e.target.value })} />
-                <input className="px-3 py-2 rounded-lg border text-sm sm:col-span-2" placeholder="Event title *" value={form.event_title} onChange={(e) => setForm({ ...form, event_title: e.target.value })} />
-                <select className="px-3 py-2 rounded-lg border text-sm form-select-light" value={form.event_type} onChange={(e) => setForm({ ...form, event_type: e.target.value })}>
+                <input className="form-input" placeholder="Client name *" value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} />
+                <input className="form-input" placeholder="Phone *" value={form.client_phone} onChange={(e) => setForm({ ...form, client_phone: e.target.value })} />
+                <input className="form-input sm:col-span-2" placeholder="Email" value={form.client_email} onChange={(e) => setForm({ ...form, client_email: e.target.value })} />
+                <input className="form-input sm:col-span-2" placeholder="Event title *" value={form.event_title} onChange={(e) => setForm({ ...form, event_title: e.target.value })} />
+                <select className="form-select" value={form.event_type} onChange={(e) => setForm({ ...form, event_type: e.target.value })}>
                   {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
-                <input className="px-3 py-2 rounded-lg border text-sm" type="date" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} />
-                <input className="px-3 py-2 rounded-lg border text-sm sm:col-span-2" placeholder="Venue" value={form.venue} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
-                <textarea className="px-3 py-2 rounded-lg border text-sm sm:col-span-2 min-h-[80px]" placeholder="Event description" value={form.event_description} onChange={(e) => setForm({ ...form, event_description: e.target.value })} />
+                <input className="form-input" type="date" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} />
+                <input className="form-input sm:col-span-2" placeholder="Venue" value={form.venue} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
+                <textarea className="form-input sm:col-span-2 min-h-[80px] resize-y" placeholder="Event description" value={form.event_description} onChange={(e) => setForm({ ...form, event_description: e.target.value })} />
               </div>
             </div>
             <div className="flex justify-end gap-2 p-5 border-t">

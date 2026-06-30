@@ -15,7 +15,6 @@ use App\Support\PhoneFormatter;
 use App\Support\WasenderRateLimiter;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Storage;
 
 class RequestNotificationService
 {
@@ -72,19 +71,12 @@ class RequestNotificationService
         $this->whatsapp->sendNotification($phone, $text, 'status_update', ServiceRequest::class, $request->id);
 
         if (in_array($request->status, ['approved', 'rejected', 'quotation_prepared', 'awaiting_payment'], true)) {
-            $pdfUrl = $this->resolvePdfUrl($request);
-            if ($pdfUrl) {
-                WasenderRateLimiter::beforeAttachment();
-                $this->whatsapp->sendDocument(
-                    $phone,
-                    $pdfUrl,
-                    'status_pdf',
-                    'Updated request PDF — '.$request->reference_number,
-                    $request->reference_number.'.pdf',
-                    ServiceRequest::class,
-                    $request->id,
-                );
-            }
+            $this->sendPdfDocument(
+                $phone,
+                $request,
+                'status_pdf',
+                'Updated request PDF — '.$request->reference_number
+            );
         }
     }
 
@@ -105,19 +97,12 @@ class RequestNotificationService
         $text = MessageTemplates::quotationPrepared($request, $trackingUrl, $amount, $notes);
         $this->whatsapp->sendNotification($phone, $text, 'quotation_prepared', ServiceRequest::class, $request->id);
 
-        $pdfUrl = $this->resolvePdfUrl($request);
-        if ($pdfUrl) {
-            WasenderRateLimiter::beforeAttachment();
-            $this->whatsapp->sendDocument(
-                $phone,
-                $pdfUrl,
-                'quotation_pdf',
-                'Quotation PDF — '.$request->reference_number,
-                $request->reference_number.'.pdf',
-                ServiceRequest::class,
-                $request->id,
-            );
-        }
+        $this->sendPdfDocument(
+            $phone,
+            $request,
+            'quotation_pdf',
+            'Quotation PDF — '.$request->reference_number
+        );
     }
 
     public function sendClientConfirmed(ServiceRequest $request): void
@@ -134,28 +119,16 @@ class RequestNotificationService
             return;
         }
 
-        $amount = $request->quoted_amount ? number_format((float) $request->quoted_amount, 0).' RWF' : 'as quoted';
-        $text = "Dear {$request->client_name},\n\n"
-            ."Your quotation for *{$request->reference_number}* ({$request->event_title}) has been confirmed.\n"
-            ."Total: {$amount}\n\n"
-            ."Track your request: {$trackingUrl}\n\n"
-            .config('ips.company_name');
+        $text = MessageTemplates::clientConfirmed($request, $trackingUrl);
 
         $this->whatsapp->sendNotification($phone, $text, 'quotation_confirmed', ServiceRequest::class, $request->id);
 
-        $pdfUrl = $this->resolvePdfUrl($request);
-        if ($pdfUrl) {
-            WasenderRateLimiter::beforeAttachment();
-            $this->whatsapp->sendDocument(
-                $phone,
-                $pdfUrl,
-                'confirmed_pdf',
-                'Confirmed quotation PDF — '.$request->reference_number,
-                $request->reference_number.'.pdf',
-                ServiceRequest::class,
-                $request->id,
-            );
-        }
+        $this->sendPdfDocument(
+            $phone,
+            $request,
+            'confirmed_pdf',
+            'Confirmed quotation PDF — '.$request->reference_number
+        );
     }
 
     public function notifyAssignee(ServiceRequest $request, User $assignee): void
@@ -197,19 +170,16 @@ class RequestNotificationService
             return;
         }
 
-        $text = MessageTemplates::requestReceivedClient($request, $trackingUrl);
+        $text = MessageTemplates::requestReceivedClient($request, $trackingUrl, (bool) $pdfUrl);
         $this->whatsapp->sendNotification($phone, $text, 'request_received', ServiceRequest::class, $request->id);
 
         if ($pdfUrl) {
-            WasenderRateLimiter::beforeAttachment();
-            $this->whatsapp->sendDocument(
+            $this->sendPdfDocument(
                 $phone,
-                $pdfUrl,
+                $request,
                 'request_pdf',
                 'Your request PDF — '.$request->reference_number,
-                $request->reference_number.'.pdf',
-                ServiceRequest::class,
-                $request->id,
+                $pdfUrl
             );
         }
     }
@@ -231,15 +201,12 @@ class RequestNotificationService
             $this->whatsapp->sendNotification($phone, $text, 'admin_new_request', ServiceRequest::class, $request->id);
 
             if ($pdfUrl) {
-                WasenderRateLimiter::beforeAttachment();
-                $this->whatsapp->sendDocument(
+                $this->sendPdfDocument(
                     $phone,
-                    $pdfUrl,
+                    $request,
                     'admin_request_pdf',
                     'New request PDF — '.$request->reference_number,
-                    $request->reference_number.'.pdf',
-                    ServiceRequest::class,
-                    $request->id,
+                    $pdfUrl
                 );
             }
         }
@@ -271,25 +238,49 @@ class RequestNotificationService
 
     private function resolvePdfUrl(ServiceRequest $request): ?string
     {
-        if (! $request->pdf_path || ! Storage::disk('public')->exists($request->pdf_path)) {
-            $this->pdfService->generate($request);
-            $request->refresh();
+        return $this->pdfService->whatsAppDocumentUrl($request, $this->wasender);
+    }
+
+    private function sendPdfDocument(
+        string $phone,
+        ServiceRequest $request,
+        string $messageType,
+        string $caption,
+        ?string $preparedUrl = null
+    ): void {
+        $pdfUrl = $preparedUrl ?: $this->resolvePdfUrl($request);
+
+        if (! $pdfUrl) {
+            Log::error('Skipping WhatsApp PDF — no reachable URL', [
+                'request' => $request->reference_number,
+                'message_type' => $messageType,
+                'phone' => $phone,
+            ]);
+
+            return;
         }
 
-        if (! $request->pdf_path) {
-            return null;
+        WasenderRateLimiter::beforeAttachment();
+
+        $result = $this->whatsapp->sendDocument(
+            $phone,
+            $pdfUrl,
+            $messageType,
+            $caption,
+            $request->reference_number.'.pdf',
+            ServiceRequest::class,
+            $request->id,
+        );
+
+        if (! ($result['success'] ?? false)) {
+            Log::error('WhatsApp PDF document send failed', [
+                'request' => $request->reference_number,
+                'message_type' => $messageType,
+                'phone' => $phone,
+                'pdf_url' => $pdfUrl,
+                'error' => $result['error'] ?? 'unknown',
+            ]);
         }
-
-        $pdfContent = Storage::disk('public')->get($request->pdf_path);
-
-        if ($this->wasender->isConfigured()) {
-            $upload = $this->wasender->uploadBuffer($pdfContent, 'application/pdf');
-            if ($upload['success'] && $upload['public_url']) {
-                return $upload['public_url'];
-            }
-        }
-
-        return $this->pdfService->getPublicUrl($request);
     }
 
     /** @return string[] */
