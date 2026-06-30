@@ -2,7 +2,7 @@ import { AdminTabBar } from '@/components/admin/AdminTabBar'
 import { Button } from '@/components/ui/Button'
 import { Seo } from '@/components/shared/Seo'
 import { useAuth } from '@/context/AuthContext'
-import { api, type AdminUser, type StaffTask } from '@/lib/api'
+import { api, type AdminUser, type AssignableRequest, type StaffTask } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { CheckSquare, List, Loader2, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -18,8 +18,14 @@ export function AdminTasks() {
   const [status, setStatus] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
-    title: '', description: '', assigned_to: '', priority: 'normal', due_date: '',
+  const [showAssign, setShowAssign] = useState(false)
+  const [assignable, setAssignable] = useState<AssignableRequest[]>([])
+  const [assignForm, setAssignForm] = useState({
+    service_request_id: '',
+    assigned_to: '',
+    service_item_ids: [] as number[],
+    notes: '',
+    due_date: '',
   })
 
   const load = () => {
@@ -35,7 +41,44 @@ export function AdminTasks() {
     })
   }
 
+  const [form, setForm] = useState({
+    title: '', description: '', assigned_to: '', priority: 'normal', due_date: '',
+  })
+
   useEffect(load, [token, status])
+
+  const openAssign = () => {
+    if (!token) return
+    setShowAssign(true)
+    api.getAssignableRequests(token).then((d) => { if (d) setAssignable(d) })
+  }
+
+  const selectedRequest = assignable.find((r) => r.id === Number(assignForm.service_request_id))
+
+  const assignFromRequest = async () => {
+    if (!token || !assignForm.service_request_id || !assignForm.assigned_to || !assignForm.service_item_ids.length) return
+    setSaving(true)
+    await api.assignTaskFromRequest(token, {
+      service_request_id: Number(assignForm.service_request_id),
+      assigned_to: Number(assignForm.assigned_to),
+      service_item_ids: assignForm.service_item_ids,
+      notes: assignForm.notes || undefined,
+      due_date: assignForm.due_date || undefined,
+    })
+    setSaving(false)
+    setShowAssign(false)
+    setAssignForm({ service_request_id: '', assigned_to: '', service_item_ids: [], notes: '', due_date: '' })
+    load()
+  }
+
+  const toggleAssignService = (id: number) => {
+    setAssignForm((f) => ({
+      ...f,
+      service_item_ids: f.service_item_ids.includes(id)
+        ? f.service_item_ids.filter((i) => i !== id)
+        : [...f.service_item_ids, id],
+    }))
+  }
 
   const createTask = async () => {
     if (!token || !form.title.trim()) return
@@ -68,9 +111,12 @@ export function AdminTasks() {
             <h1 className="text-3xl font-bold text-ips-blue">Task Management</h1>
             <p className="text-slate-600 text-sm mt-1">Assign and track staff tasks</p>
           </div>
-          <Button onClick={() => setShowForm(!showForm)} className="gap-2">
-            <Plus size={16} /> New Task
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={openAssign} className="gap-2">Assign from Request</Button>
+            <Button onClick={() => setShowForm(!showForm)} className="gap-2">
+              <Plus size={16} /> New Task
+            </Button>
+          </div>
         </div>
 
         <AdminTabBar
@@ -82,6 +128,51 @@ export function AdminTasks() {
             { label: 'Completed', active: status === 'completed', onClick: () => setStatus('completed'), color: 'green' },
           ]}
         />
+
+        {showAssign && (
+          <div className="admin-card p-6 mb-6">
+            <h2 className="font-bold text-ips-blue mb-4">Assign from Client Request</h2>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium mb-1.5">Confirmed Request</label>
+                <select className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm" value={assignForm.service_request_id} onChange={(e) => setAssignForm({ ...assignForm, service_request_id: e.target.value, service_item_ids: [] })}>
+                  <option value="">Select request</option>
+                  {assignable.map((r) => (
+                    <option key={r.id} value={r.id}>{r.reference_number} — {r.client_name}</option>
+                  ))}
+                </select>
+              </div>
+              {selectedRequest && (
+                <div className="sm:col-span-2 flex flex-wrap gap-2">
+                  {selectedRequest.services.map((s) => (
+                    <label key={s.id} className={cn('text-xs px-3 py-1.5 rounded-full border cursor-pointer', assignForm.service_item_ids.includes(s.id) ? 'bg-ips-blue text-white border-ips-blue' : 'border-slate-200')}>
+                      <input type="checkbox" className="sr-only" checked={assignForm.service_item_ids.includes(s.id)} onChange={() => toggleAssignService(s.id)} />
+                      {s.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Assign To</label>
+                <select className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm" value={assignForm.assigned_to} onChange={(e) => setAssignForm({ ...assignForm, assigned_to: e.target.value })}>
+                  <option value="">Select staff</option>
+                  {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Due Date</label>
+                <input type="date" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm" value={assignForm.due_date} onChange={(e) => setAssignForm({ ...assignForm, due_date: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <textarea className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm" rows={2} placeholder="Notes for assignee (no amounts in PDF)" value={assignForm.notes} onChange={(e) => setAssignForm({ ...assignForm, notes: e.target.value })} />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <Button onClick={assignFromRequest} disabled={saving}>Assign Task</Button>
+              <Button variant="outline" onClick={() => setShowAssign(false)}>Cancel</Button>
+            </div>
+          </div>
+        )}
 
         {showForm && (
           <div className="admin-card p-6 mb-6">

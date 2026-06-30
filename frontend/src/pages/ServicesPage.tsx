@@ -51,7 +51,7 @@ export function ServicesPage() {
                   <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed flex-1 mb-5">
                     {service.short_description || service.description}
                   </p>
-                  <Link to="/request">
+                  <Link to={`/request?service=${service.id}`}>
                     <Button variant="outline" size="sm" className="gap-2 w-full sm:w-auto border-ips-gold text-ips-blue dark:text-ips-gold hover:bg-ips-gold hover:text-ips-blue">
                       Request <ArrowRight size={14} />
                     </Button>

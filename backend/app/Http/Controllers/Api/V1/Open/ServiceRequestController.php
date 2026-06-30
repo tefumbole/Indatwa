@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api\V1\Open;
 use App\Http\Controllers\Controller;
 use App\Models\Service;
 use App\Models\ServiceRequest;
+use App\Services\ClientAccountService;
 use App\Services\Notifications\RequestNotificationService;
 use App\Services\ReferenceNumberService;
 use App\Services\RequestPdfService;
+use App\Services\SiteSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -107,7 +109,13 @@ class ServiceRequestController extends Controller
             }
 
             try {
-                app(RequestPdfService::class)->generate($fresh);
+                app(ClientAccountService::class)->ensureForRequest($fresh);
+            } catch (\Throwable $e) {
+                Log::error('Client account creation failed: '.$e->getMessage());
+            }
+
+            try {
+                app(RequestPdfService::class)->generate($fresh->fresh());
             } catch (\Throwable $e) {
                 Log::error('Request PDF generation failed: '.$e->getMessage());
             }
@@ -138,33 +146,55 @@ class ServiceRequestController extends Controller
             ->with(['items.service', 'documents'])
             ->firstOrFail();
 
+        $settings = app(SiteSettingsService::class)->branding();
+        $approvedItems = $request->items->where('status', 'approved');
+
         return response()->json([
             'success' => true,
             'data' => [
                 'reference_number' => $request->reference_number,
                 'status' => $request->status,
                 'client_name' => $request->client_name,
+                'client_phone' => $request->client_phone,
+                'client_email' => $request->client_email,
+                'client_nationality' => $request->client_nationality,
+                'client_country' => $request->client_country,
+                'client_city' => $request->client_city,
                 'event_title' => $request->event_title,
                 'event_date' => $request->event_date->format('Y-m-d'),
                 'event_type' => $request->event_type,
                 'venue' => $request->venue,
+                'event_description' => $request->event_description,
                 'services' => $request->items->map(fn ($item) => [
+                    'id' => $item->id,
                     'name' => $item->service_name,
                     'status' => $item->status,
-                    'quoted_price' => $item->quoted_price,
+                    'client_status' => $item->client_status ?? 'pending',
+                    'quoted_price' => $item->status === 'approved' ? $item->quoted_price : null,
                 ]),
                 'quoted_amount' => $request->quoted_amount,
+                'miscellaneous_amount' => $request->miscellaneous_amount,
                 'quotation_notes' => $request->quotation_notes,
                 'sent_for_signature_at' => $request->sent_for_signature_at
                     ? $request->sent_for_signature_at->toIso8601String() : null,
                 'client_signed_at' => $request->client_signed_at
                     ? $request->client_signed_at->toIso8601String() : null,
+                'agreement_accepted' => (bool) $request->agreement_accepted,
                 'can_accept_quotation' => $request->status === 'quotation_prepared'
                     && $request->sent_for_signature_at
                     && ! $request->client_signed_at,
                 'documents_count' => $request->documents->count(),
+                'has_id_document' => $request->documents->contains(fn ($d) => in_array($d->document_type, ['passport', 'national_id'], true)),
                 'pdf_url' => $this->pdfService->getPublicUrl($request),
                 'submitted_at' => $request->submitted_at->toIso8601String(),
+                'branding' => [
+                    'company_name' => $settings['company_name'],
+                    'company_phone' => $settings['company_phone'],
+                    'company_location' => $settings['company_location'],
+                    'logo_url' => $settings['logo_url'],
+                ],
+                'rental_agreement_html' => $settings['rental_agreement_html'],
+                'accepted_services_total' => $approvedItems->where('client_status', 'accepted')->sum('quoted_price'),
             ],
         ]);
     }
@@ -173,9 +203,17 @@ class ServiceRequestController extends Controller
     {
         $validated = $request->validate([
             'signature' => 'required|string',
+            'agreement_accepted' => 'required|accepted',
+            'items' => 'required|array|min:1',
+            'items.*.id' => 'required|integer',
+            'items.*.client_status' => 'required|in:accepted,rejected',
+            'id_document' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'id_document_type' => 'nullable|in:passport,national_id',
         ]);
 
-        $serviceRequest = ServiceRequest::where('tracking_token', $token)->firstOrFail();
+        $serviceRequest = ServiceRequest::where('tracking_token', $token)
+            ->with('items')
+            ->firstOrFail();
 
         if ($serviceRequest->client_signed_at) {
             return response()->json(['success' => false, 'message' => 'Quotation already accepted'], 422);
@@ -185,25 +223,82 @@ class ServiceRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Quotation is not available for acceptance'], 422);
         }
 
+        $approvedIds = $serviceRequest->items->where('status', 'approved')->pluck('id')->all();
+        $submittedIds = collect($validated['items'])->pluck('id')->all();
+
+        if (count(array_diff($approvedIds, $submittedIds)) > 0) {
+            return response()->json(['success' => false, 'message' => 'Please respond to all quoted services'], 422);
+        }
+
+        $acceptedCount = 0;
+        foreach ($validated['items'] as $row) {
+            $item = $serviceRequest->items->firstWhere('id', $row['id']);
+            if (! $item || $item->status !== 'approved') {
+                return response()->json(['success' => false, 'message' => 'Invalid service item'], 422);
+            }
+            $item->update([
+                'client_status' => $row['client_status'],
+                'client_responded_at' => now(),
+            ]);
+            if ($row['client_status'] === 'accepted') {
+                $acceptedCount++;
+            }
+        }
+
+        if ($acceptedCount === 0) {
+            return response()->json(['success' => false, 'message' => 'You must accept at least one service'], 422);
+        }
+
+        if ($request->hasFile('id_document')) {
+            $this->storeIdDocument($request, $serviceRequest);
+        } elseif (! $serviceRequest->documents()->whereIn('document_type', ['passport', 'national_id'])->exists()) {
+            return response()->json(['success' => false, 'message' => 'ID or passport document is required'], 422);
+        }
+
         $signaturePath = $this->storeSignature($validated['signature'], $serviceRequest->reference_number);
         if (! $signaturePath) {
             return response()->json(['success' => false, 'message' => 'Invalid signature'], 422);
         }
 
+        $serviceRequest->load('items');
+        $acceptedTotal = $serviceRequest->items
+            ->where('status', 'approved')
+            ->where('client_status', 'accepted')
+            ->sum('quoted_price');
+        $misc = (float) ($serviceRequest->miscellaneous_amount ?? 0);
+        $finalTotal = $acceptedTotal + $misc;
+
         $fromStatus = $serviceRequest->status;
         $serviceRequest->update([
             'signature_path' => $signaturePath,
             'client_signed_at' => now(),
-            'status' => 'approved',
+            'agreement_accepted' => true,
+            'agreement_accepted_at' => now(),
+            'quoted_amount' => $finalTotal,
+            'status' => 'awaiting_payment',
         ]);
 
         DB::table('service_request_status_history')->insert([
             'service_request_id' => $serviceRequest->id,
             'from_status' => $fromStatus,
-            'to_status' => 'approved',
-            'comment' => 'Client accepted quotation and signed',
+            'to_status' => 'awaiting_payment',
+            'comment' => 'Client accepted quotation, signed agreement, and selected services',
             'created_at' => now(),
         ]);
+
+        DB::table('invoices')->updateOrInsert(
+            ['service_request_id' => $serviceRequest->id],
+            [
+                'invoice_number' => 'INV-'.$serviceRequest->reference_number,
+                'total_amount' => $finalTotal,
+                'amount_paid' => 0,
+                'currency' => 'RWF',
+                'status' => 'sent',
+                'sent_at' => now(),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
 
         try {
             $this->pdfService->generate($serviceRequest->fresh());
@@ -222,6 +317,7 @@ class ServiceRequestController extends Controller
             'data' => [
                 'status' => $serviceRequest->status,
                 'client_signed_at' => $serviceRequest->client_signed_at->toIso8601String(),
+                'quoted_amount' => $serviceRequest->quoted_amount,
                 'pdf_url' => $this->pdfService->getPublicUrl($serviceRequest->fresh()),
             ],
         ]);
@@ -268,16 +364,32 @@ class ServiceRequestController extends Controller
         $types = $request->input('document_types', []);
         foreach ($request->file('documents') as $index => $file) {
             $type = $types[$index] ?? 'other_identification';
-            $filename = Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)).'_'.time().'.'.$file->getClientOriginalExtension();
-            $path = $file->storeAs("requests/{$reference}/documents", $filename, 'local');
-
-            $serviceRequest->documents()->create([
-                'document_type' => $type,
-                'original_name' => $file->getClientOriginalName(),
-                'file_path' => $path,
-                'mime_type' => $file->getMimeType(),
-                'file_size' => $file->getSize(),
-            ]);
+            $this->saveDocumentFile($serviceRequest, $reference, $file, $type);
         }
+    }
+
+    private function storeIdDocument(Request $request, ServiceRequest $serviceRequest): void
+    {
+        $file = $request->file('id_document');
+        if (! $file) {
+            return;
+        }
+
+        $type = $request->input('id_document_type', 'national_id');
+        $this->saveDocumentFile($serviceRequest, $serviceRequest->reference_number, $file, $type);
+    }
+
+    private function saveDocumentFile(ServiceRequest $serviceRequest, string $reference, $file, string $type): void
+    {
+        $filename = Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)).'_'.time().'.'.$file->getClientOriginalExtension();
+        $path = $file->storeAs("requests/{$reference}/documents", $filename, 'local');
+
+        $serviceRequest->documents()->create([
+            'document_type' => $type,
+            'original_name' => $file->getClientOriginalName(),
+            'file_path' => $path,
+            'mime_type' => $file->getMimeType(),
+            'file_size' => $file->getSize(),
+        ]);
     }
 }

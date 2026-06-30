@@ -147,4 +147,13 @@
   .request-page-bg {
     background: linear-gradient(160deg, #051a45 0%, #0B3D91 45%, #082d6b 100%);
   }
+
+  .admin-request-detail h3,
+  .admin-request-detail .font-semibold {
+    color: #0B3D91;
+  }
+
+  .admin-request-detail .admin-card {
+    border-color: rgba(11, 61, 145, 0.15);
+  }
 }

@@ -47,7 +47,7 @@ export function ServiceCard({ service, index = 0 }: ServiceCardProps) {
         {service.category && (
           <p className="text-xs text-ips-gold font-medium mb-4">{service.category.name}</p>
         )}
-        <Link to="/request">
+        <Link to={`/request?service=${service.id}`}>
           <Button variant="outline" size="sm" className="gap-1 w-full">
             Request <ArrowRight size={14} />
           </Button>

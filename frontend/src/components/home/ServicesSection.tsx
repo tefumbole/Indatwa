@@ -1,23 +1,25 @@
+import { FALLBACK_SERVICES } from '@/data/fallbacks'
+import { api, type Service } from '@/lib/api'
 import { motion } from 'framer-motion'
 import {
   Car, Cake, Coffee, GlassWater, Languages, Shield,
   Sparkles, Users, PartyPopper, MoreHorizontal, Crown,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-const services = [
-  { icon: Crown, name: 'Protocol Services', desc: 'Diplomatic protocol for state and corporate events' },
-  { icon: Car, name: 'Professional Drivers', desc: 'Chauffeur services for VIP transportation' },
-  { icon: Languages, name: 'Translators', desc: 'Professional interpretation in multiple languages' },
-  { icon: Coffee, name: 'Beverages', desc: 'Premium beverage catering and service' },
-  { icon: GlassWater, name: 'Glass Rental', desc: 'Elegant glassware for any occasion' },
-  { icon: Cake, name: 'Wedding Cakes', desc: 'Custom-designed celebration cakes' },
-  { icon: Users, name: 'Hostesses', desc: 'Professional hospitality and guest reception' },
-  { icon: Shield, name: 'Security Services', desc: 'Trained security for event protection' },
-  { icon: Sparkles, name: 'Decoration', desc: 'Premium event styling and décor' },
-  { icon: PartyPopper, name: 'Event Support', desc: 'Full-service event coordination' },
-  { icon: MoreHorizontal, name: 'Other Services', desc: 'Custom solutions for unique needs' },
-]
+const ICON_BY_SLUG: Record<string, typeof Crown> = {
+  'protocol-services': Crown,
+  'professional-drivers': Car,
+  translators: Languages,
+  beverages: Coffee,
+  'glass-rental': GlassWater,
+  'wedding-cakes': Cake,
+  hostesses: Users,
+  'security-services': Shield,
+  decoration: Sparkles,
+  'event-support': PartyPopper,
+}
 
 const container = {
   hidden: { opacity: 0 },
@@ -30,6 +32,12 @@ const item = {
 }
 
 export function ServicesSection() {
+  const [services, setServices] = useState<Service[]>([])
+
+  useEffect(() => {
+    api.getServices().then((d) => setServices(d ?? FALLBACK_SERVICES))
+  }, [])
+
   return (
     <section id="services" className="py-24 bg-slate-50 dark:bg-slate-900/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -56,19 +64,24 @@ export function ServicesSection() {
           viewport={{ once: true }}
           className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
         >
-          {services.map((service) => (
-            <motion.div
-              key={service.name}
-              variants={item}
-              className="group glass rounded-2xl p-6 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
-            >
-              <div className="w-12 h-12 rounded-xl bg-ips-blue/10 dark:bg-ips-gold/10 flex items-center justify-center mb-4 group-hover:bg-ips-blue group-hover:text-white dark:group-hover:bg-ips-gold dark:group-hover:text-ips-blue transition-colors">
-                <service.icon className="w-6 h-6 text-ips-blue dark:text-ips-gold group-hover:text-inherit" />
-              </div>
-              <h3 className="font-semibold text-ips-blue dark:text-white mb-2">{service.name}</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400">{service.desc}</p>
-            </motion.div>
-          ))}
+          {services.map((service) => {
+            const Icon = ICON_BY_SLUG[service.slug] || MoreHorizontal
+            return (
+              <motion.div key={service.id} variants={item}>
+                <Link
+                  to={`/request?service=${service.id}`}
+                  className="group block glass rounded-2xl p-6 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-ips-blue/10 dark:bg-ips-gold/10 flex items-center justify-center mb-4 group-hover:bg-ips-blue group-hover:text-white dark:group-hover:bg-ips-gold dark:group-hover:text-ips-blue transition-colors">
+                    <Icon className="w-6 h-6 text-ips-blue dark:text-ips-gold group-hover:text-inherit" />
+                  </div>
+                  <h3 className="font-semibold text-ips-blue dark:text-white mb-2">{service.name}</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">{service.short_description || service.description}</p>
+                  <p className="text-xs text-ips-blue font-semibold mt-3 group-hover:underline">Request this service →</p>
+                </Link>
+              </motion.div>
+            )
+          })}
         </motion.div>
 
         <motion.div

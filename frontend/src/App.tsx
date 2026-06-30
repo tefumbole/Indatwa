@@ -27,6 +27,9 @@ import { HomePage } from '@/pages/HomePage'
 import { RequestServicePage } from '@/pages/RequestServicePage'
 import { RequestSuccessPage } from '@/pages/RequestSuccessPage'
 import { ServicesPage } from '@/pages/ServicesPage'
+import { AdminPayments } from '@/pages/admin/AdminPayments'
+import { AdminSettings } from '@/pages/admin/AdminSettings'
+import { QuotationLoginPage } from '@/pages/QuotationLoginPage'
 import { TrackRequestPage } from '@/pages/TrackRequestPage'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
@@ -48,6 +51,7 @@ function PublicSite() {
           <Route path="/request" element={<RequestServicePage />} />
           <Route path="/request/success" element={<RequestSuccessPage />} />
           <Route path="/track/:token" element={<TrackRequestPage />} />
+          <Route path="/quotation/:accessToken" element={<QuotationLoginPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/portal" element={<PortalDashboard />} />
@@ -74,6 +78,8 @@ function App() {
                 <Route path="users" element={<AdminUsers />} />
                 <Route path="roles" element={<AdminRoles />} />
                 <Route path="tasks" element={<AdminTasks />} />
+                <Route path="payments" element={<AdminPayments />} />
+                <Route path="settings" element={<AdminSettings />} />
                 <Route path="announcements" element={<AdminAnnouncements />} />
               </Route>
             </Route>

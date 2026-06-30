@@ -8,6 +8,13 @@ use Illuminate\Support\Facades\DB;
 
 class SiteController extends Controller
 {
+    public function branding(): JsonResponse
+    {
+        $settings = app(\App\Services\SiteSettingsService::class)->branding();
+
+        return response()->json(['success' => true, 'data' => $settings]);
+    }
+
     public function publicSettings(): JsonResponse
     {
         $settings = DB::table('site_settings')->pluck('value', 'key');

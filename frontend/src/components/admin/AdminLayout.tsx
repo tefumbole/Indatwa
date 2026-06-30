@@ -1,7 +1,7 @@
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
 import {
-  CalendarDays, CheckSquare, ClipboardList, LayoutDashboard, LogOut, Megaphone, Menu, Shield, Users, X,
+  CalendarDays, CheckSquare, ClipboardList, CreditCard, LayoutDashboard, LogOut, Megaphone, Menu, Settings, Shield, Users, X,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
@@ -28,8 +28,15 @@ const NAV_GROUPS = [
     ],
   },
   {
+    label: 'Finance',
+    items: [
+      { label: 'Payments', href: '/admin/payments', icon: CreditCard },
+    ],
+  },
+  {
     label: 'Administration',
     items: [
+      { label: 'System Settings', href: '/admin/settings', icon: Settings },
       { label: 'Manage Users', href: '/admin/users', icon: Users },
       { label: 'Roles & Permissions', href: '/admin/roles', icon: Shield },
     ],

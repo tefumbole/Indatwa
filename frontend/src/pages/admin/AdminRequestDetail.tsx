@@ -1,8 +1,9 @@
+import { RequestPdfPreview } from '@/components/admin/RequestPdfPreview'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
 import { api, type AdminRequestDetail, type StaffMember } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { ArrowLeft, CheckCircle, Download, Loader2, Save, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle, Download, Loader2, Save, Trash2, XCircle } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -11,8 +12,9 @@ const STATUSES = [
   'awaiting_payment', 'approved', 'in_progress', 'completed', 'rejected',
 ]
 
-const adminSelectClass = 'px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm flex-1 min-w-[160px] outline-none focus:ring-2 focus:ring-ips-blue/20'
-const adminInputClass = 'px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm flex-1 min-w-[160px] outline-none focus:ring-2 focus:ring-ips-blue/20'
+const adminSelectClass = 'px-3 py-2 rounded-lg border border-ips-blue/30 bg-white text-ips-blue text-sm flex-1 min-w-[160px] outline-none focus:ring-2 focus:ring-ips-blue/20 font-medium'
+const adminInputClass = 'px-3 py-2 rounded-lg border border-ips-blue/30 bg-white text-ips-blue text-sm flex-1 min-w-[160px] outline-none focus:ring-2 focus:ring-ips-blue/20'
+const adminBtnOutline = 'border-ips-blue text-ips-blue hover:bg-ips-blue hover:text-white dark:!border-ips-blue dark:!text-ips-blue dark:hover:!bg-ips-blue dark:hover:!text-white'
 
 const serviceStatusStyles: Record<string, string> = {
   approved: 'bg-green-100 text-green-800 border-green-200',
@@ -35,6 +37,11 @@ export function AdminRequestDetail() {
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [quotationNotes, setQuotationNotes] = useState('')
   const [itemPrices, setItemPrices] = useState<Record<number, string>>({})
+  const [miscAmount, setMiscAmount] = useState('')
+  const [selectedItems, setSelectedItems] = useState<number[]>([])
+  const [showPreview, setShowPreview] = useState(true)
+  const [reviewDialog, setReviewDialog] = useState<{ itemId: number; name: string; status: string } | null>(null)
+  const [reviewComment, setReviewComment] = useState('')
   const [scheduleUserIds, setScheduleUserIds] = useState<number[]>([])
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -59,6 +66,7 @@ export function AdminRequestDetail() {
           if (s.quoted_price != null) prices[s.id] = String(s.quoted_price)
         })
         setItemPrices(prices)
+        setMiscAmount(req.miscellaneous_amount != null ? String(req.miscellaneous_amount) : '')
         if (req.event_start_date) setStartDate(req.event_start_date)
         if (req.event_end_date) setEndDate(req.event_end_date)
       }
@@ -90,11 +98,13 @@ export function AdminRequestDetail() {
   }, [data])
 
   const computedTotal = useMemo(() => {
-    return approvedServices.reduce((sum, s) => {
+    const itemsSum = approvedServices.reduce((sum, s) => {
       const price = Number(itemPrices[s.id] || 0)
       return sum + (Number.isFinite(price) ? price : 0)
     }, 0)
-  }, [approvedServices, itemPrices])
+    const misc = Number(miscAmount || 0)
+    return itemsSum + (Number.isFinite(misc) ? misc : 0)
+  }, [approvedServices, itemPrices, miscAmount])
 
   const isConfirmed = Boolean(data?.client_signed_at)
 
@@ -125,25 +135,42 @@ export function AdminRequestDetail() {
     load()
   }
 
-  const reviewItem = async (itemId: number, itemStatus: string, serviceName: string) => {
+  const reviewItem = async (itemId: number, itemStatus: string, serviceName: string, comment?: string) => {
     if (!token || !id) return
     setSaving(true)
-    const comment = window.prompt('Comment (optional):') || undefined
     const quoted_price = itemPrices[itemId] ? Number(itemPrices[itemId]) : undefined
     const result = await api.updateAdminRequestItem(token, Number(id), itemId, {
       status: itemStatus,
-      admin_comment: comment,
+      admin_comment: comment || undefined,
       quoted_price,
     })
     setSaving(false)
+    setReviewDialog(null)
+    setReviewComment('')
     if (result?.success) {
       setActionFeedback({
         type: 'success',
-        text: `"${serviceName}" marked as ${itemStatus}.`,
+        text: `"${serviceName}" marked as ${itemStatus}.${comment ? ' Client notified.' : ''}`,
       })
       load()
     } else {
       setActionFeedback({ type: 'error', text: `Could not update "${serviceName}". Try again.` })
+    }
+  }
+
+  const openReviewDialog = (itemId: number, name: string, status: string) => {
+    setReviewDialog({ itemId, name, status })
+    setReviewComment('')
+  }
+
+  const pendingItems = data?.services.filter((s) => s.status === 'pending') ?? []
+  const allPendingSelected = pendingItems.length > 0 && pendingItems.every((s) => selectedItems.includes(s.id))
+
+  const toggleSelectAllPending = () => {
+    if (allPendingSelected) {
+      setSelectedItems((ids) => ids.filter((id) => !pendingItems.some((s) => s.id === id)))
+    } else {
+      setSelectedItems((ids) => [...new Set([...ids, ...pendingItems.map((s) => s.id)])])
     }
   }
 
@@ -167,11 +194,31 @@ export function AdminRequestDetail() {
     load()
   }
 
+  const deleteSelectedItems = async () => {
+    if (!token || !id || !selectedItems.length) return
+    if (!window.confirm(`Remove ${selectedItems.length} service(s) from this request?`)) return
+    setSaving(true)
+    const result = await api.deleteAdminRequestItems(token, Number(id), selectedItems)
+    setSaving(false)
+    if (result?.success) {
+      setSelectedItems([])
+      setActionFeedback({ type: 'success', text: 'Selected services removed.' })
+      load()
+    } else {
+      setActionFeedback({ type: 'error', text: 'Could not remove services.' })
+    }
+  }
+
+  const toggleSelectItem = (itemId: number) => {
+    setSelectedItems((ids) => ids.includes(itemId) ? ids.filter((i) => i !== itemId) : [...ids, itemId])
+  }
+
   const sendQuotation = async (forSignature: boolean) => {
     if (!token || !id) return
     setSaving(true)
     await api.setAdminQuotation(token, Number(id), {
       quoted_amount: computedTotal,
+      miscellaneous_amount: Number(miscAmount || 0),
       quotation_notes: quotationNotes || undefined,
       send_to_client: true,
       send_for_signature: forSignature,
@@ -218,7 +265,7 @@ export function AdminRequestDetail() {
   const hasPending = data.services.some((s) => s.status === 'pending')
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto admin-request-detail text-ips-blue">
       <Link to="/admin/requests" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-ips-blue mb-6">
         <ArrowLeft size={16} /> Back to requests
       </Link>
@@ -235,28 +282,43 @@ export function AdminRequestDetail() {
       )}
 
       <div className="admin-card rounded-xl p-6 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h3 className="font-semibold text-slate-900">Request Preview</h3>
+          <div className="flex gap-2">
+            <Button size="sm" variant="ghost" className="text-ips-blue hover:bg-ips-blue/10" onClick={() => setShowPreview(!showPreview)}>
+              {showPreview ? 'Hide Preview' : 'Show Preview'}
+            </Button>
+            <Button size="sm" variant="outline" className={cn('gap-1', adminBtnOutline)} onClick={() => token && api.downloadAdminPdf(token, data.id, data.reference_number)}>
+              <Download size={14} /> PDF
+            </Button>
+          </div>
+        </div>
+        {showPreview && <RequestPdfPreview data={data} />}
+      </div>
+
+      <div className="admin-card rounded-xl p-6 mb-6">
         <div className="flex flex-wrap justify-between gap-4 mb-4">
           <div>
             <p className="font-mono font-bold text-lg text-ips-blue">{data.reference_number}</p>
-            <h1 className="font-display text-xl font-bold text-slate-900">{data.event_title}</h1>
-            <p className="text-sm text-slate-600">{data.client_name} — {data.client_phone}</p>
+            <h1 className="font-display text-xl font-bold text-ips-blue">{data.event_title}</h1>
+            <p className="text-sm text-ips-blue/80 font-medium">{data.client_name} — {data.client_phone}</p>
             {isConfirmed && (
               <p className="text-xs text-green-700 mt-1 flex items-center gap-1">
                 <CheckCircle size={14} /> Client confirmed {new Date(data.client_signed_at!).toLocaleString()}
               </p>
             )}
           </div>
-          <Button variant="outline" size="sm" className="gap-1" onClick={() => token && api.downloadAdminPdf(token, data.id, data.reference_number)}>
+          <Button variant="outline" size="sm" className="gap-1 hidden" onClick={() => token && api.downloadAdminPdf(token, data.id, data.reference_number)}>
             <Download size={14} /> PDF
           </Button>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-4 text-sm mb-6 text-slate-800">
-          <div><span className="text-slate-600 font-medium">Event date:</span> {new Date(data.event_date).toLocaleDateString()}</div>
-          <div><span className="text-slate-600 font-medium">Type:</span> {data.event_type}</div>
-          {data.venue && <div><span className="text-slate-600 font-medium">Venue:</span> {data.venue}</div>}
-          {data.client_email && <div><span className="text-slate-600 font-medium">Email:</span> {data.client_email}</div>}
-          {data.event_description && <div className="sm:col-span-2"><span className="text-slate-600 font-medium">Description:</span> {data.event_description}</div>}
+        <div className="grid sm:grid-cols-2 gap-4 text-sm mb-6 text-ips-blue">
+          <div><span className="font-semibold">Event date:</span> {new Date(data.event_date).toLocaleDateString()}</div>
+          <div><span className="font-semibold">Type:</span> {data.event_type}</div>
+          {data.venue && <div><span className="font-semibold">Venue:</span> {data.venue}</div>}
+          {data.client_email && <div><span className="font-semibold">Email:</span> {data.client_email}</div>}
+          {data.event_description && <div className="sm:col-span-2"><span className="font-semibold">Description:</span> {data.event_description}</div>}
         </div>
 
         <div className="flex flex-wrap gap-2 mb-4">
@@ -277,22 +339,33 @@ export function AdminRequestDetail() {
             <option value="">Unassigned</option>
             {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
-          <Button size="sm" variant="outline" onClick={saveAssign} disabled={saving}>Assign</Button>
+          <Button size="sm" variant="outline" className={adminBtnOutline} onClick={saveAssign} disabled={saving}>Assign</Button>
         </div>
       </div>
 
       <div className="admin-card rounded-xl p-6 mb-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
-            <h3 className="font-semibold text-slate-900 text-lg">Services</h3>
-            <p className="text-xs text-slate-600 mt-1">
+            <h3 className="font-semibold text-ips-blue text-lg">Services</h3>
+            <p className="text-xs text-ips-blue/70 mt-1">
               {serviceCounts.approved} approved · {serviceCounts.pending} pending · {serviceCounts.rejected} rejected
             </p>
           </div>
           {hasPending && (
-            <Button size="sm" variant="outline" onClick={acceptAll} disabled={saving}>
-              Accept All Pending
-            </Button>
+            <div className="flex flex-wrap gap-2 items-center">
+              <label className="flex items-center gap-2 text-xs font-semibold text-ips-blue cursor-pointer mr-2">
+                <input type="checkbox" checked={allPendingSelected} onChange={toggleSelectAllPending} />
+                Select all pending
+              </label>
+              {selectedItems.length > 0 && (
+                <Button size="sm" variant="outline" onClick={deleteSelectedItems} disabled={saving} className="gap-1 text-red-700 border-red-300 hover:bg-red-50">
+                  <Trash2 size={14} /> Delete Selected ({selectedItems.length})
+                </Button>
+              )}
+              <Button size="sm" variant="outline" className={adminBtnOutline} onClick={acceptAll} disabled={saving}>
+                Accept All Pending
+              </Button>
+            </div>
           )}
         </div>
         <div className="space-y-3">
@@ -300,15 +373,28 @@ export function AdminRequestDetail() {
             <div
               key={s.id}
               className={cn(
-                'flex flex-wrap items-center justify-between gap-3 p-4 rounded-lg border text-sm bg-white',
-                s.status === 'approved' && 'border-green-200 bg-green-50/40',
-                s.status === 'rejected' && 'border-red-200 bg-red-50/40',
-                s.status === 'pending' && 'border-amber-200 bg-amber-50/30',
+                'flex flex-wrap items-center justify-between gap-3 p-4 rounded-lg border-2 text-sm bg-white',
+                s.status === 'approved' && 'border-green-300 bg-green-50/40',
+                s.status === 'rejected' && 'border-red-300 bg-red-50/40',
+                s.status === 'pending' && 'border-ips-blue/30 bg-ips-blue/5',
               )}
             >
-              <div className="flex-1 min-w-[180px]">
-                <p className="font-semibold text-slate-900 text-base">{s.name}</p>
-                {s.admin_comment && <p className="text-xs text-slate-600 mt-1">{s.admin_comment}</p>}
+              <div className="flex items-start gap-3 flex-1 min-w-[180px]">
+                {s.status === 'pending' && (
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={selectedItems.includes(s.id)}
+                    onChange={() => toggleSelectItem(s.id)}
+                  />
+                )}
+                <div>
+                  <p className="font-semibold text-ips-blue text-base">{s.name}</p>
+                  {s.admin_comment && <p className="text-xs text-slate-600 mt-1">{s.admin_comment}</p>}
+                  {s.client_status && s.client_status !== 'pending' && (
+                    <p className="text-xs text-purple-700 mt-1">Client: {s.client_status}</p>
+                  )}
+                </div>
               </div>
               {s.status === 'approved' && (
                 <input
@@ -331,8 +417,8 @@ export function AdminRequestDetail() {
                 </span>
                 {s.status === 'pending' && (
                   <>
-                    <Button size="sm" variant="outline" disabled={saving} onClick={() => reviewItem(s.id, 'approved', s.name)}>Approve</Button>
-                    <Button size="sm" variant="outline" disabled={saving} onClick={() => reviewItem(s.id, 'rejected', s.name)}>Reject</Button>
+                    <Button size="sm" variant="outline" className={adminBtnOutline} disabled={saving} onClick={() => openReviewDialog(s.id, s.name, 'approved')}>Approve</Button>
+                    <Button size="sm" variant="outline" className={adminBtnOutline} disabled={saving} onClick={() => openReviewDialog(s.id, s.name, 'rejected')}>Reject</Button>
                   </>
                 )}
               </div>
@@ -345,6 +431,23 @@ export function AdminRequestDetail() {
         <div className="admin-card rounded-xl p-6 mb-6">
           <h3 className="font-semibold text-slate-900 mb-3">Quotation & Invoice</h3>
           <p className="text-xs text-slate-600 mb-3">Set a price per approved service, then send the quotation to the client for signature.</p>
+          <div className="flex items-center justify-between text-sm mb-3 p-3 rounded-lg bg-ips-blue/5 border border-ips-blue/10">
+            <span className="font-medium text-slate-800">Subtotal (approved services)</span>
+            <span className="font-semibold text-ips-blue">
+              {(computedTotal - Number(miscAmount || 0)).toLocaleString()} RWF
+            </span>
+          </div>
+          <div className="flex items-center gap-3 mb-3">
+            <label className="text-sm font-medium text-slate-700 shrink-0">Miscellaneous (RWF)</label>
+            <input
+              className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm"
+              type="number"
+              min={0}
+              placeholder="0"
+              value={miscAmount}
+              onChange={(e) => setMiscAmount(e.target.value)}
+            />
+          </div>
           <div className="flex items-center justify-between text-sm mb-3 p-3 rounded-lg bg-ips-blue/5 border border-ips-blue/10">
             <span className="font-medium text-slate-800">Total</span>
             <span className="font-bold text-ips-blue">{computedTotal.toLocaleString()} RWF</span>
@@ -450,6 +553,27 @@ export function AdminRequestDetail() {
           <Button size="sm" onClick={sendMessage}>Send</Button>
         </div>
       </div>
+
+      {reviewDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full border-2 border-ips-blue shadow-xl">
+            <h3 className="font-bold text-ips-blue mb-2 capitalize">{reviewDialog.status} — {reviewDialog.name}</h3>
+            <p className="text-xs text-ips-blue/70 mb-3">This comment will be sent to the client.</p>
+            <textarea
+              className="w-full px-3 py-2 rounded-lg border border-ips-blue/30 text-sm text-ips-blue min-h-[90px] mb-4"
+              placeholder="Message to client (optional)"
+              value={reviewComment}
+              onChange={(e) => setReviewComment(e.target.value)}
+            />
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="outline" className={adminBtnOutline} onClick={() => setReviewDialog(null)}>Cancel</Button>
+              <Button size="sm" onClick={() => reviewItem(reviewDialog.itemId, reviewDialog.status, reviewDialog.name, reviewComment || undefined)} disabled={saving}>
+                Confirm {reviewDialog.status}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

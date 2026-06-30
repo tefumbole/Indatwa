@@ -9,6 +9,7 @@ use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\ServiceRequestItem;
 use App\Models\User;
+use App\Services\ClientAccountService;
 use App\Services\Notifications\RequestNotificationService;
 use App\Services\ReferenceNumberService;
 use App\Services\RequestPdfService;
@@ -24,14 +25,18 @@ class AdminRequestController extends Controller
     private $notifications;
     private $referenceNumbers;
 
+    private $clientAccounts;
+
     public function __construct(
         RequestPdfService $pdfService,
         RequestNotificationService $notifications,
-        ReferenceNumberService $referenceNumbers
+        ReferenceNumberService $referenceNumbers,
+        ClientAccountService $clientAccounts
     ) {
         $this->pdfService = $pdfService;
         $this->notifications = $notifications;
         $this->referenceNumbers = $referenceNumbers;
+        $this->clientAccounts = $clientAccounts;
     }
 
     public function index(Request $request): JsonResponse
@@ -114,6 +119,7 @@ class AdminRequestController extends Controller
                         'id' => $i->id,
                         'name' => $i->service_name,
                         'status' => $i->status,
+                        'client_status' => $i->client_status ?? 'pending',
                         'quoted_price' => $i->quoted_price,
                         'admin_comment' => $i->admin_comment,
                         'reviewed_at' => $i->reviewed_at,
@@ -132,6 +138,7 @@ class AdminRequestController extends Controller
                 'pdf_url' => $this->pdfService->getPublicUrl($serviceRequest),
                 'tracking_url' => config('app.frontend_url').'/track/'.$serviceRequest->tracking_token,
                 'quoted_amount' => $serviceRequest->quoted_amount,
+                'miscellaneous_amount' => $serviceRequest->miscellaneous_amount,
                 'quotation_notes' => $serviceRequest->quotation_notes,
                 'sent_for_signature_at' => $serviceRequest->sent_for_signature_at
                     ? $serviceRequest->sent_for_signature_at->toIso8601String() : null,
@@ -199,6 +206,26 @@ class AdminRequestController extends Controller
             'reviewed_by' => $request->user()->id,
             'reviewed_at' => now(),
         ]);
+
+        if (! empty($validated['admin_comment'])) {
+            $statusLabel = ucfirst($validated['status']);
+            $serviceRequest->messages()->create([
+                'sender_id' => $request->user()->id,
+                'message' => "Service \"{$item->service_name}\" — {$statusLabel}: {$validated['admin_comment']}",
+                'is_internal' => false,
+            ]);
+
+            try {
+                $this->notifications->sendServiceReviewNote(
+                    $serviceRequest->fresh(),
+                    $item->fresh(),
+                    $validated['status'],
+                    $validated['admin_comment']
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Service review WhatsApp failed: '.$e->getMessage());
+            }
+        }
 
         return response()->json(['success' => true, 'data' => $item]);
     }
@@ -287,10 +314,30 @@ class AdminRequestController extends Controller
         );
     }
 
+    public function deleteItems(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'item_ids' => 'required|array|min:1',
+            'item_ids.*' => 'integer',
+        ]);
+
+        $serviceRequest = ServiceRequest::findOrFail($id);
+
+        ServiceRequestItem::where('service_request_id', $serviceRequest->id)
+            ->whereIn('id', $validated['item_ids'])
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'data' => ['remaining' => $serviceRequest->items()->count()],
+        ]);
+    }
+
     public function setQuotation(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
             'quoted_amount' => 'nullable|numeric|min:0',
+            'miscellaneous_amount' => 'nullable|numeric|min:0',
             'quotation_notes' => 'nullable|string|max:5000',
             'send_to_client' => 'nullable|boolean',
             'send_for_signature' => 'nullable|boolean',
@@ -311,18 +358,33 @@ class AdminRequestController extends Controller
             $serviceRequest->load('items');
         }
 
-        $total = $validated['quoted_amount']
-            ?? $serviceRequest->items->where('status', 'approved')->sum('quoted_price');
+        $misc = (float) ($validated['miscellaneous_amount'] ?? $serviceRequest->miscellaneous_amount ?? 0);
+        $itemsTotal = $serviceRequest->items->where('status', 'approved')->sum('quoted_price');
+        $total = isset($validated['quoted_amount'])
+            ? (float) $validated['quoted_amount']
+            : ($itemsTotal + $misc);
 
-        if ($total === null || $total === '') {
+        if ($total <= 0 && $serviceRequest->items->where('status', 'approved')->isNotEmpty()) {
             return response()->json(['success' => false, 'message' => 'Quoted amount is required'], 422);
+        }
+
+        $sendForSignature = ! empty($validated['send_for_signature']);
+        $accessToken = $serviceRequest->quotation_access_token;
+
+        if ($sendForSignature) {
+            $this->clientAccounts->ensureForRequest($serviceRequest);
+            $accessToken = $this->clientAccounts->issueQuotationToken($serviceRequest->fresh());
+            ServiceRequestItem::where('service_request_id', $serviceRequest->id)
+                ->where('status', 'approved')
+                ->update(['client_status' => 'pending', 'client_responded_at' => null]);
         }
 
         $serviceRequest->update([
             'quoted_amount' => $total,
+            'miscellaneous_amount' => $misc,
             'quotation_notes' => $validated['quotation_notes'] ?? null,
-            'quotation_sent_at' => ! empty($validated['send_to_client']) ? now() : $serviceRequest->quotation_sent_at,
-            'sent_for_signature_at' => ! empty($validated['send_for_signature']) ? now() : $serviceRequest->sent_for_signature_at,
+            'quotation_sent_at' => ! empty($validated['send_to_client']) || $sendForSignature ? now() : $serviceRequest->quotation_sent_at,
+            'sent_for_signature_at' => $sendForSignature ? now() : $serviceRequest->sent_for_signature_at,
             'status' => 'quotation_prepared',
             'reviewed_by' => $request->user()->id,
             'reviewed_at' => now(),
@@ -358,12 +420,13 @@ class AdminRequestController extends Controller
             \Illuminate\Support\Facades\Log::error('Quotation PDF failed: '.$e->getMessage());
         }
 
-        if (! empty($validated['send_to_client']) || ! empty($validated['send_for_signature'])) {
+        if (! empty($validated['send_to_client']) || $sendForSignature) {
             try {
                 $this->notifications->sendQuotation(
                     $serviceRequest->fresh(),
                     (float) $total,
-                    $validated['quotation_notes'] ?? null
+                    $validated['quotation_notes'] ?? null,
+                    $accessToken
                 );
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::error('Quotation WhatsApp failed: '.$e->getMessage());
@@ -374,9 +437,13 @@ class AdminRequestController extends Controller
             'success' => true,
             'data' => [
                 'quoted_amount' => $serviceRequest->quoted_amount,
+                'miscellaneous_amount' => $serviceRequest->miscellaneous_amount,
                 'status' => $serviceRequest->status,
                 'invoice_number' => $invoiceNumber,
                 'sent_for_signature_at' => $serviceRequest->sent_for_signature_at,
+                'quotation_login_url' => $accessToken
+                    ? config('app.frontend_url').'/quotation/'.$accessToken
+                    : null,
             ],
         ]);
     }
@@ -514,6 +581,7 @@ class AdminRequestController extends Controller
     private function applyTabFilter($query, string $tab): void
     {
         switch ($tab) {
+            case 'awaiting_quotation':
             case 'awaiting_confirmation':
                 $query->whereIn('status', ['submitted', 'under_review'])
                     ->whereHas('items', fn ($q) => $q->where('status', 'pending'));

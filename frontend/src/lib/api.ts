@@ -126,6 +126,7 @@ export interface AuthUser {
   id: number
   uuid: string
   name: string
+  username?: string | null
   email: string | null
   phone: string
   roles: string[]
@@ -154,7 +155,21 @@ export interface PortalRequestDetail extends PortalRequestSummary {
   event_description: string | null
   venue: string | null
   number_of_guests: number | null
-  services: { name: string; status: string }[]
+  client_name?: string
+  quoted_amount?: number | null
+  miscellaneous_amount?: number | null
+  quotation_notes?: string | null
+  can_accept_quotation?: boolean
+  sent_for_signature_at?: string | null
+  tracking_token?: string
+  services: {
+    id?: number
+    name: string
+    status: string
+    client_status?: string
+    quoted_price?: number | null
+    admin_comment?: string | null
+  }[]
   documents: { id: number; type: string; name: string; uploaded_at: string }[]
   status_history: { from_status: string | null; to_status: string; created_at: string }[]
   messages: { id: number; message: string; sender: { id: number; name: string }; created_at: string }[]
@@ -280,13 +295,14 @@ export interface AdminRequestDetail {
   admin_notes: string | null
   client_notes: string | null
   assigned_to: { id: number; name: string; email?: string } | null
-  services: { id: number; name: string; status: string; admin_comment: string | null; quoted_price?: number | null }[]
+  services: { id: number; name: string; status: string; client_status?: string; admin_comment: string | null; quoted_price?: number | null }[]
   documents: { id: number; type: string; name: string; uploaded_at: string }[]
   status_history: { from_status: string | null; to_status: string; created_at: string; note?: string }[]
   messages: { id: number; message: string; is_internal: boolean; sender: { id: number; name: string }; created_at: string }[]
   pdf_url: string | null
   tracking_url: string
   quoted_amount?: number | null
+  miscellaneous_amount?: number | null
   quotation_notes?: string | null
   sent_for_signature_at?: string | null
   client_signed_at?: string | null
@@ -423,19 +439,83 @@ export interface TrackRequestResult {
   reference_number: string
   status: string
   client_name: string
+  client_phone?: string
+  client_email?: string | null
+  client_nationality?: string | null
+  client_country?: string | null
+  client_city?: string | null
   event_title: string
   event_date: string
   event_type: string
   venue: string | null
-  services: { name: string; status: string; quoted_price?: number | null }[]
+  event_description?: string | null
+  services: { id: number; name: string; status: string; client_status?: string; quoted_price?: number | null }[]
   documents_count: number
+  has_id_document?: boolean
   pdf_url: string | null
   submitted_at: string
   quoted_amount?: number | null
+  miscellaneous_amount?: number | null
   quotation_notes?: string | null
   sent_for_signature_at?: string | null
   client_signed_at?: string | null
+  agreement_accepted?: boolean
   can_accept_quotation?: boolean
+  rental_agreement_html?: string
+  branding?: {
+    company_name: string
+    company_phone: string
+    company_location: string
+    logo_url?: string | null
+  }
+}
+
+export interface InvoiceRecord {
+  id: number
+  invoice_number: string
+  total_amount: number
+  amount_paid: number
+  balance_due: number
+  currency: string
+  status: string
+  due_date?: string | null
+  sent_at?: string | null
+  service_request?: {
+    id: number
+    reference_number: string
+    client_name: string
+    client_phone: string
+    event_title: string
+    status: string
+  } | null
+  payments?: {
+    id: number
+    amount: number
+    payment_method?: string | null
+    reference?: string | null
+    notes?: string | null
+    paid_at?: string | null
+    recorded_by?: string | null
+  }[]
+}
+
+export interface AssignableRequest {
+  id: number
+  reference_number: string
+  client_name: string
+  event_title: string
+  services: { id: number; name: string }[]
+}
+
+export interface SiteBrandingSettings {
+  company_name?: string
+  company_phone?: string
+  company_location?: string
+  pdf_header_html?: string
+  pdf_footer_html?: string
+  rental_agreement_html?: string
+  logo_url?: string | null
+  logo_path?: string | null
 }
 
 function buildRequestFormData(data: RequestFormData): FormData {
@@ -533,10 +613,47 @@ export const api = {
     }
   },
 
+  getBranding: () => fetchApi<SiteBrandingSettings>('/settings/branding'),
+
   trackRequest: (token: string) => fetchApi<TrackRequestResult>(`/track/${token}`),
 
-  acceptQuotation: (token: string, signature: string) =>
-    postApi<{ status: string; client_signed_at: string; pdf_url: string | null }>(`/track/${token}/accept`, { signature }),
+  acceptQuotation: async (token: string, data: {
+    signature: string
+    agreement_accepted: boolean
+    items: { id: number; client_status: 'accepted' | 'rejected' }[]
+    id_document?: File | null
+    id_document_type?: 'passport' | 'national_id'
+  }) => {
+    try {
+      const form = new FormData()
+      form.append('signature', data.signature)
+      form.append('agreement_accepted', data.agreement_accepted ? '1' : '0')
+      data.items.forEach((item, i) => {
+        form.append(`items[${i}][id]`, String(item.id))
+        form.append(`items[${i}][client_status]`, item.client_status)
+      })
+      if (data.id_document) {
+        form.append('id_document', data.id_document)
+        if (data.id_document_type) form.append('id_document_type', data.id_document_type)
+      }
+      const res = await fetch(`${API_BASE}/track/${token}/accept`, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        body: form,
+      })
+      return await res.json()
+    } catch {
+      return { success: false, message: 'Network error.' }
+    }
+  },
+
+  quotationLogin: (access_token: string) =>
+    postApi<AuthResult & { tracking_token?: string; requires_profile_completion?: boolean; reference_number?: string }>(
+      '/auth/quotation-login', { access_token }
+    ),
+
+  completeProfile: (token: string, data: { name: string; username: string; password: string }) =>
+    postApi<AuthUser>('/auth/complete-profile', data, token),
 
   getPdfDownloadUrl: (token: string) => `${API_BASE}/track/${token}/pdf`,
 
@@ -673,8 +790,16 @@ export const api = {
   addAdminMessage: (token: string, id: number, message: string, is_internal = true) =>
     postApi(`/admin/requests/${id}/messages`, { message, is_internal }, token),
 
+  deleteAdminRequestItems: (token: string, id: number, item_ids: number[]) =>
+    fetch(`${API_BASE}/admin/requests/${id}/items`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ item_ids }),
+    }).then((r) => r.json()),
+
   setAdminQuotation: (token: string, id: number, data: {
     quoted_amount?: number
+    miscellaneous_amount?: number
     quotation_notes?: string
     send_to_client?: boolean
     send_for_signature?: boolean
@@ -683,6 +808,48 @@ export const api = {
 
   updateReviewsEnabled: (token: string, enabled: boolean) =>
     patchApi('/admin/settings/reviews', { enabled }, token),
+
+  getAdminSettings: (token: string) => authFetch<SiteBrandingSettings>('/admin/settings', token),
+
+  updateAdminBranding: (token: string, data: Partial<SiteBrandingSettings>) =>
+    patchApi('/admin/settings/branding', data, token),
+
+  uploadAdminLogo: async (token: string, file: File) => {
+    const form = new FormData()
+    form.append('logo', file)
+    const res = await fetch(`${API_BASE}/admin/settings/logo`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      body: form,
+    })
+    return res.json()
+  },
+
+  getAdminPayments: (token: string, tab?: 'all' | 'awaiting') => {
+    const qs = tab && tab !== 'all' ? `?tab=${tab}` : ''
+    return authFetch<InvoiceRecord[]>(`/admin/payments${qs}`, token)
+  },
+
+  recordInvoicePayment: (token: string, invoiceId: number, data: {
+    amount: number
+    payment_method?: string
+    reference?: string
+    notes?: string
+  }) => postApi(`/admin/payments/${invoiceId}/record`, data, token),
+
+  sendInvoice: (token: string, invoiceId: number) =>
+    postApi(`/admin/payments/${invoiceId}/send`, {}, token),
+
+  getAssignableRequests: (token: string) =>
+    authFetch<AssignableRequest[]>('/admin/tasks/assignable-requests', token),
+
+  assignTaskFromRequest: (token: string, data: {
+    service_request_id: number
+    assigned_to: number
+    service_item_ids: number[]
+    notes?: string
+    due_date?: string
+  }) => postAuthApi<StaffTask>('/admin/tasks/assign-from-request', data, token),
 
   getAdminStaff: (token: string) => authFetch<StaffMember[]>('/admin/staff', token),
 

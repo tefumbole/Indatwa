@@ -9,7 +9,8 @@ class StaffTask extends Model
 {
     protected $fillable = [
         'title', 'description', 'status', 'priority',
-        'assigned_to', 'service_request_id', 'created_by',
+        'assigned_to', 'service_request_id', 'assigned_service_item_ids', 'hide_amounts',
+        'created_by',
         'due_date', 'completed_at',
         'assignment_notified_at', 'last_reminder_at', 'last_reminder_type',
     ];
@@ -19,6 +20,8 @@ class StaffTask extends Model
         'completed_at' => 'datetime',
         'assignment_notified_at' => 'datetime',
         'last_reminder_at' => 'datetime',
+        'assigned_service_item_ids' => 'array',
+        'hide_amounts' => 'boolean',
     ];
 
     public function assignee(): BelongsTo

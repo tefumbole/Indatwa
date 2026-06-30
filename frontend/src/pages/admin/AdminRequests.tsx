@@ -8,11 +8,11 @@ import { Loader2, Plus, Search, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-type WorkflowTab = 'all' | 'awaiting_confirmation' | 'awaiting_client' | 'confirmed'
+type WorkflowTab = 'all' | 'awaiting_quotation' | 'awaiting_client' | 'confirmed'
 
 const WORKFLOW_TABS: { key: WorkflowTab; label: string; color: 'blue' | 'gold' | 'purple' | 'green' }[] = [
   { key: 'all', label: 'All Services', color: 'blue' },
-  { key: 'awaiting_confirmation', label: 'Awaiting Confirmation', color: 'gold' },
+  { key: 'awaiting_quotation', label: 'Awaiting Quotation', color: 'gold' },
   { key: 'awaiting_client', label: 'Awaiting Client Confirmation', color: 'purple' },
   { key: 'confirmed', label: 'Confirmed', color: 'green' },
 ]

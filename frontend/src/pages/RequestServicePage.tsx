@@ -11,10 +11,21 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+
+const EVENT_TYPE_ICONS: Record<string, string> = {
+  Wedding: '💒',
+  'Corporate Conference': '🏢',
+  'Government / Diplomatic': '🏛️',
+  'State Visit': '🇷🇼',
+  'Private Celebration': '🎉',
+  'Product Launch': '🚀',
+  'Gala Dinner': '🍽️',
+  'Funeral / Memorial': '🕊️',
+  Other: '✨',
+}
 
 const inputClass = 'w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/40 focus:ring-2 focus:ring-ips-gold/40 focus:border-ips-gold outline-none transition text-sm'
-const selectClass = `${inputClass} form-select-dark`
 const labelClass = 'block text-sm font-medium text-white/80 mb-1.5'
 
 const TOTAL_STEPS = STEP_LABELS.length
@@ -41,6 +52,7 @@ const initialForm: RequestFormData = {
 
 export function RequestServicePage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { token } = useAuth()
   const [step, setStep] = useState(1)
   const [form, setForm] = useState<RequestFormData>(initialForm)
@@ -51,10 +63,22 @@ export function RequestServicePage() {
 
   useEffect(() => {
     api.getServices().then((data) => {
-      setServices(data ?? FALLBACK_SERVICES)
+      const list = data ?? FALLBACK_SERVICES
+      setServices(list)
       setLoading(false)
+
+      const serviceId = searchParams.get('service')
+      if (serviceId) {
+        const id = Number(serviceId)
+        if (!Number.isNaN(id) && list.some((s) => s.id === id)) {
+          setForm((prev) => ({
+            ...prev,
+            services: prev.services.includes(id) ? prev.services : [...prev.services, id],
+          }))
+        }
+      }
     })
-  }, [])
+  }, [searchParams])
 
   const update = (fields: Partial<RequestFormData>) => {
     setForm((prev) => ({ ...prev, ...fields }))
@@ -281,10 +305,23 @@ export function RequestServicePage() {
                       </div>
                       <div>
                         <label className={labelClass}>Event Type *</label>
-                        <select className={selectClass} value={form.event_type} onChange={(e) => update({ event_type: e.target.value })}>
-                          <option value="">Select type</option>
-                          {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
+                        <div className="grid sm:grid-cols-2 gap-2">
+                          {EVENT_TYPES.map((t) => (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => update({ event_type: t })}
+                              className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                                form.event_type === t
+                                  ? 'border-ips-gold bg-ips-gold/15 shadow-lg shadow-ips-gold/10'
+                                  : 'border-white/15 bg-white/5 hover:border-ips-gold/40'
+                              }`}
+                            >
+                              <span className="text-xl shrink-0">{EVENT_TYPE_ICONS[t] || '📌'}</span>
+                              <span className="text-sm font-medium text-white">{t}</span>
+                            </button>
+                          ))}
+                        </div>
                         {errors.event_type && <p className="text-red-500 text-xs mt-1">{errors.event_type}</p>}
                       </div>
                       <div className="grid sm:grid-cols-2 gap-4">

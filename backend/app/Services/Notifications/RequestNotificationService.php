@@ -80,7 +80,7 @@ class RequestNotificationService
         }
     }
 
-    public function sendQuotation(ServiceRequest $request, float $amount, ?string $notes = null): void
+    public function sendQuotation(ServiceRequest $request, float $amount, ?string $notes = null, ?string $accessToken = null): void
     {
         if (! $this->wasender->isConfigured()) {
             return;
@@ -88,13 +88,22 @@ class RequestNotificationService
 
         $request->load(['items']);
         $trackingUrl = config('app.frontend_url').'/track/'.$request->tracking_token;
+        if ($accessToken) {
+            $trackingUrl = config('app.frontend_url').'/quotation/'.$accessToken;
+        }
         $phone = PhoneFormatter::toE164($request->client_phone);
 
         if (! $phone) {
             return;
         }
 
-        $text = MessageTemplates::quotationPrepared($request, $trackingUrl, $amount, $notes);
+        $text = MessageTemplates::quotationPrepared(
+            $request,
+            $trackingUrl,
+            $amount,
+            $notes,
+            (float) ($request->miscellaneous_amount ?? 0)
+        );
         $this->whatsapp->sendNotification($phone, $text, 'quotation_prepared', ServiceRequest::class, $request->id);
 
         $this->sendPdfDocument(
@@ -103,6 +112,53 @@ class RequestNotificationService
             'quotation_pdf',
             'Quotation PDF — '.$request->reference_number
         );
+    }
+
+    public function sendServiceReviewNote(ServiceRequest $request, \App\Models\ServiceRequestItem $item, string $status, string $comment): void
+    {
+        if (! $this->wasender->isConfigured()) {
+            return;
+        }
+
+        $phone = PhoneFormatter::toE164($request->client_phone);
+        if (! $phone) {
+            return;
+        }
+
+        $trackingUrl = config('app.frontend_url').'/track/'.$request->tracking_token;
+        $text = MessageTemplates::serviceReviewUpdate($request, $item, $status, $comment, $trackingUrl);
+        $this->whatsapp->sendNotification($phone, $text, 'service_review', ServiceRequest::class, $request->id);
+    }
+
+    public function sendInvoice(ServiceRequest $request, \App\Models\Invoice $invoice): void
+    {
+        if (! $this->wasender->isConfigured()) {
+            return;
+        }
+
+        $phone = PhoneFormatter::toE164($request->client_phone);
+        if (! $phone) {
+            return;
+        }
+
+        $trackingUrl = config('app.frontend_url').'/track/'.$request->tracking_token;
+        $balance = number_format($invoice->balanceDue(), 0).' RWF';
+
+        $text = implode("\n", [
+            '🧾 *INVOICE*',
+            '───────────────',
+            '',
+            "Hello {$request->client_name},",
+            '',
+            "Invoice *{$invoice->invoice_number}* for {$request->reference_number}.",
+            "Balance due: *{$balance}*",
+            '',
+            "View details: {$trackingUrl}",
+            '',
+            '_'.config('wasender.company_name').'_',
+        ]);
+
+        $this->whatsapp->sendNotification($phone, $text, 'invoice_sent', ServiceRequest::class, $request->id);
     }
 
     public function sendClientConfirmed(ServiceRequest $request): void

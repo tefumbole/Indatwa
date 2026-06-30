@@ -108,6 +108,23 @@ function DetailContent() {
             <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={uploadFile} />
           </div>
 
+          <div className="mb-6 grid sm:grid-cols-2 gap-3 text-sm">
+            <div className="p-3 rounded-lg bg-ips-blue/5 border border-ips-blue/15">
+              <p className="text-xs font-semibold text-ips-blue uppercase">Client</p>
+              <p className="font-bold text-ips-blue mt-1">{data.client_name || '—'}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-ips-blue/5 border border-ips-blue/15">
+              <p className="text-xs font-semibold text-ips-blue uppercase">Event</p>
+              <p className="font-bold text-ips-blue mt-1">{data.event_title}</p>
+            </div>
+            {data.venue && (
+              <div className="p-3 rounded-lg bg-ips-blue/5 border border-ips-blue/15 sm:col-span-2">
+                <p className="text-xs font-semibold text-ips-blue uppercase">Venue</p>
+                <p className="font-bold text-ips-blue mt-1">{data.venue}</p>
+              </div>
+            )}
+          </div>
+
           {data.status_history?.length > 0 && (
             <div className="mb-6">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-ips-blue mb-3">Status Timeline</h3>
@@ -125,15 +142,35 @@ function DetailContent() {
 
           {data.services.length > 0 && (
             <div className="mb-6">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-ips-blue mb-3">Services</h3>
-              <div className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-ips-blue mb-3">Services & Quotation</h3>
+              <div className="space-y-2 border border-ips-blue/20 rounded-xl p-4 bg-ips-blue/5">
                 {data.services.map((s, i) => (
-                  <div key={i} className="flex justify-between text-sm p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                    <span>{s.name}</span>
-                    <span className={cn('text-xs capitalize', s.status === 'approved' ? 'text-green-600' : s.status === 'rejected' ? 'text-red-600' : 'text-yellow-600')}>{s.status}</span>
+                  <div key={s.id ?? i} className="flex flex-wrap justify-between gap-2 text-sm p-2 rounded-lg bg-white border border-ips-blue/10">
+                    <span className="font-semibold text-ips-blue">{s.name}</span>
+                    <div className="flex items-center gap-2">
+                      {s.quoted_price != null && s.status === 'approved' && (
+                        <span className="text-xs font-bold text-ips-blue">{Number(s.quoted_price).toLocaleString()} RWF</span>
+                      )}
+                      <span className={cn('text-xs capitalize px-2 py-0.5 rounded-full', s.status === 'approved' ? 'bg-green-100 text-green-700' : s.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}>{s.status}</span>
+                    </div>
+                    {s.admin_comment && <p className="w-full text-xs text-ips-blue/70">{s.admin_comment}</p>}
                   </div>
                 ))}
+                {data.miscellaneous_amount ? (
+                  <p className="text-sm text-ips-blue text-right">Miscellaneous: <strong>{Number(data.miscellaneous_amount).toLocaleString()} RWF</strong></p>
+                ) : null}
+                {data.quoted_amount != null && (
+                  <p className="text-sm font-bold text-ips-blue text-right pt-2 border-t border-ips-blue/20">
+                    Total: {Number(data.quoted_amount).toLocaleString()} RWF
+                  </p>
+                )}
+                {data.quotation_notes && <p className="text-xs text-ips-blue/70">{data.quotation_notes}</p>}
               </div>
+              {data.can_accept_quotation && data.tracking_token && (
+                <Link to={`/track/${data.tracking_token}`} className="inline-block mt-4">
+                  <Button size="sm">Review & Approve Quotation</Button>
+                </Link>
+              )}
             </div>
           )}
 

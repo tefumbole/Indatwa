@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Admin\AdminBookingController;
 use App\Http\Controllers\Api\V1\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\AdminRoleController;
 use App\Http\Controllers\Api\V1\Admin\AdminRequestController;
+use App\Http\Controllers\Api\V1\Admin\AdminPaymentController;
 use App\Http\Controllers\Api\V1\Admin\AdminSettingsController;
 use App\Http\Controllers\Api\V1\Admin\AdminTaskController;
 use App\Http\Controllers\Api\V1\Admin\AdminUserController;
@@ -31,6 +32,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/track/{token}', [ServiceRequestController::class, 'track']);
     Route::post('/track/{token}/accept', [ServiceRequestController::class, 'acceptQuotation']);
     Route::get('/track/{token}/pdf', [ServiceRequestController::class, 'downloadPdf']);
+    Route::get('/settings/branding', [SiteController::class, 'branding']);
     Route::get('/settings/public', [SiteController::class, 'publicSettings']);
     Route::get('/testimonials', [SiteController::class, 'testimonials']);
     Route::get('/reviews', [ReviewController::class, 'index']);
@@ -49,6 +51,7 @@ Route::prefix('v1')->group(function () {
     Route::prefix('auth')->group(function () {
         Route::post('/register', [AuthController::class, 'register']);
         Route::post('/login', [AuthController::class, 'login']);
+        Route::post('/quotation-login', [AuthController::class, 'quotationLogin']);
         Route::post('/otp/request', [AuthController::class, 'requestOtp']);
         Route::post('/otp/verify', [AuthController::class, 'verifyOtp']);
         Route::post('/2fa/verify', [AuthController::class, 'verify2fa']);
@@ -56,6 +59,7 @@ Route::prefix('v1')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/me', [AuthController::class, 'me']);
             Route::post('/logout', [AuthController::class, 'logout']);
+            Route::post('/complete-profile', [AuthController::class, 'completeProfile']);
             Route::post('/2fa/setup', [AuthController::class, 'setup2fa']);
             Route::post('/2fa/confirm', [AuthController::class, 'confirm2fa']);
         });
@@ -92,11 +96,18 @@ Route::prefix('v1')->group(function () {
         Route::post('/requests/{id}/messages', [AdminRequestController::class, 'addMessage']);
         Route::post('/requests/{id}/quotation', [AdminRequestController::class, 'setQuotation']);
         Route::post('/requests/{id}/accept-all', [AdminRequestController::class, 'acceptAll']);
+        Route::delete('/requests/{id}/items', [AdminRequestController::class, 'deleteItems']);
         Route::post('/requests/{id}/assign-schedule', [AdminRequestController::class, 'assignSchedule']);
+        Route::get('/payments', [AdminPaymentController::class, 'index']);
+        Route::post('/payments/{invoiceId}/record', [AdminPaymentController::class, 'recordPayment']);
+        Route::post('/payments/{invoiceId}/send', [AdminPaymentController::class, 'sendInvoice']);
+        Route::get('/payments/{invoiceId}/pdf', [AdminPaymentController::class, 'downloadInvoice']);
         Route::get('/bookings/calendar', [AdminBookingController::class, 'month']);
         Route::post('/bookings/calendar/toggle', [AdminBookingController::class, 'toggle']);
         Route::get('/settings', [AdminSettingsController::class, 'index']);
         Route::patch('/settings/reviews', [AdminSettingsController::class, 'updateReviews']);
+        Route::patch('/settings/branding', [AdminSettingsController::class, 'updateBranding']);
+        Route::post('/settings/logo', [AdminSettingsController::class, 'uploadLogo']);
 
         Route::middleware('role:super_admin,director,operations_manager')->group(function () {
             Route::get('/users', [AdminUserController::class, 'index']);
@@ -114,6 +125,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/tasks', [AdminTaskController::class, 'index']);
             Route::get('/tasks/mine', [AdminTaskController::class, 'myTasks']);
             Route::post('/tasks', [AdminTaskController::class, 'store']);
+            Route::post('/tasks/assign-from-request', [AdminTaskController::class, 'assignFromRequest']);
+            Route::get('/tasks/assignable-requests', [AdminTaskController::class, 'assignableRequests']);
             Route::patch('/tasks/{id}', [AdminTaskController::class, 'update']);
             Route::delete('/tasks/{id}', [AdminTaskController::class, 'destroy']);
 

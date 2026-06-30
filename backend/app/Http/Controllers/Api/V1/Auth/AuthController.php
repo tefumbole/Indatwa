@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\Role;
+use App\Models\ServiceRequest;
 use App\Models\User;
 use App\Services\Auth\OtpService;
 use App\Support\PhoneFormatter;
@@ -252,6 +253,65 @@ class AuthController extends Controller
         return response()->json(['success' => true, 'message' => '2FA enabled']);
     }
 
+    public function quotationLogin(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'access_token' => 'required|string|size:64',
+        ]);
+
+        $serviceRequest = ServiceRequest::where('quotation_access_token', $validated['access_token'])
+            ->with('user')
+            ->first();
+
+        if (! $serviceRequest || ! $serviceRequest->user) {
+            return response()->json(['success' => false, 'message' => 'Invalid or expired quotation link'], 404);
+        }
+
+        $user = $serviceRequest->user;
+        if (! $user->is_active) {
+            return response()->json(['success' => false, 'message' => 'Account deactivated'], 403);
+        }
+
+        $user->update(['last_login_at' => now()]);
+        $token = $user->createToken($this->tokenName($user).'-quotation')->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'token' => $token,
+                'user' => $this->userPayload($user->load('roles')),
+                'tracking_token' => $serviceRequest->tracking_token,
+                'requires_profile_completion' => ! $serviceRequest->profile_completed_at,
+                'reference_number' => $serviceRequest->reference_number,
+            ],
+        ]);
+    }
+
+    public function completeProfile(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'username' => 'required|string|max:50|unique:users,username,'.$request->user()->id,
+            'password' => 'required|string|min:6',
+        ]);
+
+        $user = $request->user();
+        $user->update([
+            'name' => $validated['name'],
+            'username' => $validated['username'],
+            'password' => $validated['password'],
+        ]);
+
+        ServiceRequest::where('user_id', $user->id)
+            ->whereNull('profile_completed_at')
+            ->update(['profile_completed_at' => now()]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->userPayload($user->fresh()->load('roles')),
+        ]);
+    }
+
     public function me(Request $request): JsonResponse
     {
         return response()->json([
@@ -273,6 +333,7 @@ class AuthController extends Controller
             'id' => $user->id,
             'uuid' => $user->uuid,
             'name' => $user->name,
+            'username' => $user->username,
             'email' => $user->email,
             'phone' => $user->phone,
             'roles' => $user->roles->pluck('name'),

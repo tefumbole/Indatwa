@@ -18,6 +18,31 @@ class MessageTemplates
     }
 
     /** @param Collection<int, \App\Models\ServiceRequestItem> $items */
+    private static function formatQuotedServicesBreakdown(Collection $items, ?float $miscellaneous = null): string
+    {
+        $approved = $items->where('status', 'approved');
+        if ($approved->isEmpty()) {
+            return '■ *Services:* (none quoted)';
+        }
+
+        $lines = $approved->map(function ($i) {
+            $price = $i->quoted_price !== null
+                ? number_format((float) $i->quoted_price, 0).' RWF'
+                : '—';
+
+            return "   • {$i->service_name}: *{$price}*";
+        })->join("\n");
+
+        $block = "■ *Services & amounts:*\n{$lines}";
+
+        if ($miscellaneous !== null && $miscellaneous > 0) {
+            $block .= "\n   • Miscellaneous: *".number_format($miscellaneous, 0).' RWF*';
+        }
+
+        return $block;
+    }
+
+    /** @param Collection<int, \App\Models\ServiceRequestItem> $items */
     private static function formatServicesList(Collection $items): string
     {
         if ($items->isEmpty()) {
@@ -145,9 +170,10 @@ class MessageTemplates
         ]);
     }
 
-    public static function quotationPrepared(ServiceRequest $request, string $trackingUrl, float $amount, ?string $notes = null): string
+    public static function quotationPrepared(ServiceRequest $request, string $trackingUrl, float $amount, ?string $notes = null, ?float $miscellaneous = null): string
     {
         $formatted = number_format($amount, 0).' RWF';
+        $misc = $miscellaneous ?? (float) ($request->miscellaneous_amount ?? 0);
 
         return implode("\n", array_filter([
             self::header('💰', 'Quotation Ready'),
@@ -158,8 +184,8 @@ class MessageTemplates
             '',
             "■ *Reference:* {$request->reference_number}",
             "■ *Event:* {$request->event_title}",
-            "■ *Amount:* {$formatted}",
-            self::formatServicesList($request->items->where('status', 'approved')),
+            self::formatQuotedServicesBreakdown($request->items, $misc > 0 ? $misc : null),
+            "■ *Total:* {$formatted}",
             $notes ? "■ *Notes:* {$notes}" : null,
             '',
             "Review and accept: {$trackingUrl}",
@@ -168,6 +194,27 @@ class MessageTemplates
             '',
             self::sign(),
         ], fn ($line) => $line !== null));
+    }
+
+    public static function serviceReviewUpdate(ServiceRequest $request, $item, string $status, string $comment, string $trackingUrl): string
+    {
+        $statusLabel = ucfirst($status);
+
+        return implode("\n", [
+            self::header('📋', 'Service Update'),
+            '',
+            "Hello {$request->client_name},",
+            '',
+            "An update on your request *{$request->reference_number}*.",
+            '',
+            "■ *Service:* {$item->service_name}",
+            "■ *Status:* {$statusLabel}",
+            "■ *Message:* {$comment}",
+            '',
+            "View details: {$trackingUrl}",
+            '',
+            self::sign(),
+        ]);
     }
 
     public static function clientConfirmed(ServiceRequest $request, string $trackingUrl): string

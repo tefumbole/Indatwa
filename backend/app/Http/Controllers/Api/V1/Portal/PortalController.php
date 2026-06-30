@@ -71,9 +71,24 @@ class PortalController extends Controller
                 'venue' => $serviceRequest->venue,
                 'number_of_guests' => $serviceRequest->number_of_guests,
                 'services' => $serviceRequest->items->map(fn ($i) => [
+                    'id' => $i->id,
                     'name' => $i->service_name,
                     'status' => $i->status,
+                    'client_status' => $i->client_status ?? 'pending',
+                    'quoted_price' => $i->status === 'approved' ? $i->quoted_price : null,
+                    'admin_comment' => $i->admin_comment,
                 ]),
+                'quoted_amount' => $serviceRequest->quoted_amount,
+                'miscellaneous_amount' => $serviceRequest->miscellaneous_amount,
+                'quotation_notes' => $serviceRequest->quotation_notes,
+                'client_name' => $serviceRequest->client_name,
+                'client_phone' => $serviceRequest->client_phone,
+                'can_accept_quotation' => $serviceRequest->status === 'quotation_prepared'
+                    && $serviceRequest->sent_for_signature_at
+                    && ! $serviceRequest->client_signed_at,
+                'sent_for_signature_at' => $serviceRequest->sent_for_signature_at
+                    ? $serviceRequest->sent_for_signature_at->toIso8601String() : null,
+                'tracking_token' => $serviceRequest->tracking_token,
                 'documents' => $serviceRequest->documents->map(fn ($d) => [
                     'id' => $d->id,
                     'type' => $d->document_type,
